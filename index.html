@@ -430,10 +430,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
-const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
-const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjkzNjUsImV4cCI6MjA5MTM0NTM2NX0.qoLwcxscyncUCbkeYxZqIuopzqkNn9LEF8yIimHeBkU';
-const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc2OTM2NSwiZXhwIjoyMDkxMzQ1MzY1fQ.nBrW06bD0vbDsupXeS7f_yR0oZgs4omvNWbM6KAO4Ig';
-const EDIT_PASSWORD    = 'G4t3k33p3r.';
+const SUPABASE_URL     = 'SUPABASE_URL_PLACEHOLDER';
+const SUPABASE_ANON    = 'SUPABASE_ANON_PLACEHOLDER';
+const SUPABASE_SERVICE = 'SUPABASE_SERVICE_PLACEHOLDER';
+const EDIT_PASSWORD    = 'EDIT_PASSWORD_PLACEHOLDER';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -473,8 +473,13 @@ function setLoading(id,on){
 }
 
 // ── SUPABASE API ──────────────────────────────────────────────────
+// Read operations: direct Supabase REST with anon key (public)
+// Write operations: routed through Edge Function proxy (hides service key)
 async function sbFetch(path, opts={}, useService=false){
-  const key = useService ? SUPABASE_SERVICE : SUPABASE_ANON;
+  if(useService && (opts.method==='POST'||opts.method==='PATCH'||opts.method==='DELETE')){
+    return sbProxy(path, opts);
+  }
+  const key = SUPABASE_ANON;
   const res = await fetch(SUPABASE_URL+'/rest/v1/'+path, {
     ...opts,
     headers:{
@@ -494,12 +499,35 @@ async function sbFetch(path, opts={}, useService=false){
   return null;
 }
 
+// Calls the Edge Function proxy (service key lives only server-side)
+async function sbProxy(path, opts={}){
+  const res = await fetch(SUPABASE_URL+'/functions/v1/prompts-proxy', {
+    method: 'POST',
+    headers:{
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON,
+      'Authorization': 'Bearer '+SUPABASE_ANON,
+      'x-edit-password': EDIT_PASSWORD
+    },
+    body: JSON.stringify({
+      path,
+      method:  opts.method  || 'GET',
+      body:    opts.body    || null,
+      prefer:  opts.prefer  || ''
+    })
+  });
+  if(!res.ok){
+    const txt = await res.text();
+    throw new Error(res.status+': '+txt);
+  }
+  const ct = res.headers.get('content-type')||'';
+  if(ct.includes('json') && res.status!==204) return res.json();
+  return null;
+}
+
 // ── INIT ─────────────────────────────────────────────────────────
 (async function init(){
-  buildDropdowns('f-cat','f-ia', false);
-  buildDropdowns('ef-cat','ef-ia', true);
-  populateSub('f-sub','');
-  populateSub('ef-sub','');
+  await loadMeta();
   // load total count
   try{
     const res = await fetch(SUPABASE_URL+'/rest/v1/prompts?select=id', {
@@ -509,6 +537,38 @@ async function sbFetch(path, opts={}, useService=false){
     document.getElementById('totalCount').textContent = parseInt(count).toLocaleString('es-ES');
   } catch(e){ document.getElementById('totalCount').textContent='?'; }
 })();
+
+// ── DYNAMIC METADATA ──────────────────────────────────────────────
+// CATS, IAS, SUBCATS start as static fallback; overwritten from DB on load
+async function loadMeta(){
+  try{
+    // Fetch distinct categoria + subcategoria + ia in one query (max 1000 combos, well within limits)
+    const rows = await sbFetch(
+      'prompts?select=categoria,subcategoria,ia&order=categoria.asc,subcategoria.asc,ia.asc',
+      {headers:{'Range':'0-999','Prefer':''}}, false
+    );
+    if(!rows||!rows.length) return;
+    const catsSet=new Set(), iasSet=new Set(), subMap={};
+    rows.forEach(r=>{
+      if(r.categoria){ catsSet.add(r.categoria); }
+      if(r.ia){ iasSet.add(r.ia); }
+      if(r.categoria && r.subcategoria){
+        if(!subMap[r.categoria]) subMap[r.categoria]=new Set();
+        subMap[r.categoria].add(r.subcategoria);
+      }
+    });
+    // Overwrite globals
+    CATS.length=0; [...catsSet].sort().forEach(c=>CATS.push(c));
+    IAS.length=0;  [...iasSet].sort().forEach(i=>IAS.push(i));
+    Object.keys(SUBCATS).forEach(k=>delete SUBCATS[k]);
+    Object.keys(subMap).forEach(c=>{ SUBCATS[c]=[...subMap[c]].sort(); });
+  } catch(e){ console.warn('loadMeta failed, using static fallback:', e.message); }
+  // Rebuild dropdowns with fresh data
+  buildDropdowns('f-cat','f-ia', false);
+  buildDropdowns('ef-cat','ef-ia', true);
+  populateSub('f-sub','');
+  populateSub('ef-sub','');
+}
 
 function buildDropdowns(catId, iaId, withAll){
   const pref = withAll ? '— Todas —' : '— Todas las categorías —';
@@ -682,21 +742,22 @@ async function loadEditPage(page){
     document.getElementById('editCount').textContent=editTotalCount.toLocaleString('es-ES')+' mostradas';
     const start=(page-1)*EDIT_PAGE_SIZE, end=start+EDIT_PAGE_SIZE-1;
     const rows=await sbFetch(q,{headers:{'Range':start+'-'+end,'Prefer':''},prefer:''},true);
-    renderEditRows(rows||[]);
+    renderEditRows(rows||[], start);
     renderPag('editPag', page, Math.ceil(editTotalCount/EDIT_PAGE_SIZE), 'loadEditPage');
   } catch(e){
     document.getElementById('editTbody').innerHTML='<tr><td colspan="8" style="color:var(--red);padding:16px;">Error: '+esc(e.message)+'</td></tr>';
   }
 }
 
-function renderEditRows(rows){
+function renderEditRows(rows, offset=0){
   const tbody=document.getElementById('editTbody');
   if(!rows.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-dimmer);">Sin resultados</td></tr>';return;}
-  tbody.innerHTML=rows.map(r=>{
+  tbody.innerHTML=rows.map((r,i)=>{
+    const pos=offset+i+1;   // 1-based position in current filtered set
     const pp=r.prompt.length>80?r.prompt.slice(0,80)+'…':r.prompt;
     const np=(r.notas||'').length>40?(r.notas||'').slice(0,40)+'…':(r.notas||'');
     return '<tr>'+
-      '<td><span class="row-num">'+r.id+'</span></td>'+
+      '<td><span class="row-num" title="ID interno: '+r.id+'">'+pos+'</span></td>'+
       '<td class="td-cat">'+esc(r.categoria)+'</td>'+
       '<td class="td-sub">'+esc(r.subcategoria)+'</td>'+
       '<td class="td-ia">'+esc(r.ia)+'</td>'+
@@ -839,29 +900,62 @@ async function confirmDelete(){
   } catch(e){ toast('Error: '+e.message,true); closeConfirm(); }
 }
 
-// ── RANGE DELETE ──────────────────────────────────────────────────
+// ── RANGE DELETE (by position) ───────────────────────────────────
+// Positions are 1-based row numbers in the current filtered view (same as shown in table).
+// We fetch the IDs of those rows then delete by ID — safe regardless of gaps in the sequence.
+let _rangeIds = [];
+
 async function askRangeDelete(){
   const from=parseInt(document.getElementById('rd-from').value),
         to=parseInt(document.getElementById('rd-to').value);
-  if(isNaN(from)||isNaN(to)){toast('Introduce ambos IDs.',true);return;}
-  if(from>to){toast('El ID de inicio debe ser ≤ al de fin.',true);return;}
-  // Count affected rows
+  if(isNaN(from)||isNaN(to)){toast('Introduce ambas posiciones.',true);return;}
+  if(from<1){toast('La posición mínima es 1.',true);return;}
+  if(from>to){toast('La posición de inicio debe ser ≤ a la de fin.',true);return;}
+  // Build the same filter as the edit table
+  const fc=document.getElementById('ef-cat').value,
+        fs=document.getElementById('ef-sub').value,
+        fi=document.getElementById('ef-ia').value,
+        fq=document.getElementById('ef-q').value.trim();
+  let q='prompts?select=id';
+  if(fc) q+='&categoria=eq.'+encodeURIComponent(fc);
+  if(fs) q+='&subcategoria=eq.'+encodeURIComponent(fs);
+  if(fi) q+='&ia=eq.'+encodeURIComponent(fi);
+  if(fq) q+='&nombre=ilike.'+encodeURIComponent('%'+fq+'%');
+  q+='&order=id.asc';
   try{
-    const res=await fetch(SUPABASE_URL+'/rest/v1/prompts?id=gte.'+from+'&id=lte.'+to,{
-      headers:{'apikey':SUPABASE_SERVICE,'Authorization':'Bearer '+SUPABASE_SERVICE,'Prefer':'count=exact','Range':'0-0'}
-    });
-    const count=parseInt(res.headers.get('content-range')?.split('/')[1]||'0');
+    // Fetch only the IDs in the position range (0-based Range header)
+    const start=from-1, end=to-1;
+    const rows=await sbFetch(q,{headers:{'Range':start+'-'+end,'Prefer':''},prefer:''},false);
+    if(!rows||!rows.length){toast('No hay entradas en ese rango.',true);return;}
+    _rangeIds=rows.map(r=>r.id);
     _rangeFrom=from; _rangeTo=to;
+    // Fetch first and last name for confirmation
+    const first=await sbFetch('prompts?select=nombre&id=eq.'+_rangeIds[0],{headers:{'Range':'0-0','Prefer':''}},false);
+    const last =await sbFetch('prompts?select=nombre&id=eq.'+_rangeIds[_rangeIds.length-1],{headers:{'Range':'0-0','Prefer':''}},false);
+    const fn=first&&first[0]?first[0].nombre:'?';
+    const ln=last &&last[0] ?last[0].nombre:'?';
     document.getElementById('confirmRangeMsg').innerHTML=
-      'Se eliminarán <strong style="color:var(--red)">'+count+' entradas</strong> con ID entre <strong>'+from+'</strong> y <strong>'+to+'</strong>.<br><br>Esta acción no se puede deshacer.';
+      'Se eliminarán <strong style="color:var(--red)">'+_rangeIds.length+' entradas</strong> '+
+      '(posiciones <strong>'+from+'</strong> a <strong>'+to+'</strong>).<br><br>'+
+      'Primera: <em>'+esc(fn)+'</em><br>Última: <em>'+esc(ln)+'</em><br><br>'+
+      'Esta acción no se puede deshacer.';
     document.getElementById('confirmRangeOverlay').classList.add('open');
   } catch(e){ toast('Error consultando rango: '+e.message,true); }
 }
-function closeConfirmRange(){ document.getElementById('confirmRangeOverlay').classList.remove('open'); _rangeFrom=_rangeTo=null; }
+function closeConfirmRange(){
+  document.getElementById('confirmRangeOverlay').classList.remove('open');
+  _rangeFrom=_rangeTo=null; _rangeIds=[];
+}
 async function confirmRangeDelete(){
+  if(!_rangeIds.length) return;
   try{
-    await sbFetch('prompts?id=gte.'+_rangeFrom+'&id=lte.'+_rangeTo,{method:'DELETE',prefer:'return=minimal'},true);
-    toast('Rango eliminado.');
+    // Delete in batches of 100 IDs using IN filter
+    const BATCH=100;
+    for(let i=0;i<_rangeIds.length;i+=BATCH){
+      const ids=_rangeIds.slice(i,i+BATCH).join(',');
+      await sbFetch('prompts?id=in.('+ids+')',{method:'DELETE',prefer:'return=minimal'},true);
+    }
+    toast(_rangeIds.length+' entradas eliminadas.');
     closeConfirmRange();
     document.getElementById('rd-from').value='';
     document.getElementById('rd-to').value='';
