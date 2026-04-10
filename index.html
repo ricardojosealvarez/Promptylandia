@@ -227,7 +227,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-edit" onclick="requireAuth()">&#x270E; Editar base</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.4.2</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.4.3</div>
   </div>
 </div>
 
@@ -431,10 +431,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
-const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
-const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjkzNjUsImV4cCI6MjA5MTM0NTM2NX0.qoLwcxscyncUCbkeYxZqIuopzqkNn9LEF8yIimHeBkU';
-const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc2OTM2NSwiZXhwIjoyMDkxMzQ1MzY1fQ.nBrW06bD0vbDsupXeS7f_yR0oZgs4omvNWbM6KAO4Ig';
-const EDIT_PASSWORD    = 'G4t3k33p3r.';
+const SUPABASE_URL     = 'SUPABASE_URL_PLACEHOLDER';
+const SUPABASE_ANON    = 'SUPABASE_ANON_PLACEHOLDER';
+const SUPABASE_SERVICE = 'SUPABASE_SERVICE_PLACEHOLDER';
+const EDIT_PASSWORD    = 'EDIT_PASSWORD_PLACEHOLDER';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -542,25 +542,34 @@ async function sbProxy(path, method, body, prefer){
 })();
 
 // ── DYNAMIC METADATA ──────────────────────────────────────────────
-// CATS, IAS, SUBCATS start as static fallback; overwritten from DB on load
+// Normalize unicode to NFC at the source so all comparisons work correctly
+function norm(s){ return s ? String(s).normalize('NFC') : ''; }
+
 async function loadMeta(){
   try{
-    // Fetch distinct categoria + subcategoria + ia in one query (max 1000 combos, well within limits)
-    const rows = await sbFetch(
-      'prompts?select=categoria,subcategoria,ia&order=categoria.asc,subcategoria.asc,ia.asc',
-      {headers:{'Range':'0-999','Prefer':''}}, false
-    );
-    if(!rows||!rows.length) return;
+    // Fetch in pages of 1000 until all distinct combos are loaded
     const catsSet=new Set(), iasSet=new Set(), subMap={};
-    rows.forEach(r=>{
-      if(r.categoria){ catsSet.add(r.categoria); }
-      if(r.ia){ iasSet.add(r.ia); }
-      if(r.categoria && r.subcategoria){
-        if(!subMap[r.categoria]) subMap[r.categoria]=new Set();
-        subMap[r.categoria].add(r.subcategoria);
-      }
-    });
-    // Overwrite globals
+    let page=0, done=false;
+    while(!done){
+      const start=page*1000, end=start+999;
+      const rows = await sbFetch(
+        'prompts?select=categoria,subcategoria,ia&order=categoria.asc,subcategoria.asc,ia.asc',
+        {headers:{'Range':start+'-'+end,'Prefer':''}}, false
+      );
+      if(!rows||!rows.length){ done=true; break; }
+      rows.forEach(r=>{
+        const cat=norm(r.categoria), sub=norm(r.subcategoria), ia=norm(r.ia);
+        if(cat){ catsSet.add(cat); }
+        if(ia){  iasSet.add(ia);  }
+        if(cat && sub){
+          if(!subMap[cat]) subMap[cat]=new Set();
+          subMap[cat].add(sub);
+        }
+      });
+      if(rows.length < 1000) done=true; else page++;
+    }
+    if(!catsSet.size) return;
+    // Overwrite globals — all values now NFC normalized
     CATS.length=0; [...catsSet].sort().forEach(c=>CATS.push(c));
     IAS.length=0;  [...iasSet].sort().forEach(i=>IAS.push(i));
     Object.keys(SUBCATS).forEach(k=>delete SUBCATS[k]);
@@ -804,9 +813,6 @@ function renderPag(containerId, current, total, callbackName){
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────
-// Normalize unicode to NFC so DB values and static arrays always match
-function norm(s){ return s ? s.normalize('NFC') : ''; }
-
 function buildModalDropdowns(cat,sub,ia){
   const catN=norm(cat), subN=norm(sub), iaN=norm(ia);
   const mCat=document.getElementById('m-cat');
