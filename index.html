@@ -430,10 +430,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
-const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
-const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjkzNjUsImV4cCI6MjA5MTM0NTM2NX0.qoLwcxscyncUCbkeYxZqIuopzqkNn9LEF8yIimHeBkU';
-const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc2OTM2NSwiZXhwIjoyMDkxMzQ1MzY1fQ.nBrW06bD0vbDsupXeS7f_yR0oZgs4omvNWbM6KAO4Ig';
-const EDIT_PASSWORD    = 'G4t3k33p3r.';
+const SUPABASE_URL     = 'SUPABASE_URL_PLACEHOLDER';
+const SUPABASE_ANON    = 'SUPABASE_ANON_PLACEHOLDER';
+const SUPABASE_SERVICE = 'SUPABASE_SERVICE_PLACEHOLDER';
+const EDIT_PASSWORD    = 'EDIT_PASSWORD_PLACEHOLDER';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -473,21 +473,28 @@ function setLoading(id,on){
 }
 
 // ── SUPABASE API ──────────────────────────────────────────────────
-// Read operations: direct Supabase REST with anon key (public)
-// Write operations: routed through Edge Function proxy (hides service key)
+// All reads  → direct REST with anon key (RLS allows public SELECT)
+// All writes → Edge Function proxy (service key never exposed in frontend)
+
 async function sbFetch(path, opts={}, useService=false){
-  if(useService && (opts.method==='POST'||opts.method==='PATCH'||opts.method==='DELETE')){
-    return sbProxy(path, opts);
+  const method = opts.method || 'GET';
+  const isWrite = method==='POST' || method==='PATCH' || method==='DELETE';
+
+  if(isWrite){
+    // Route ALL writes through the proxy regardless of useService flag
+    return sbProxy(path, method, opts.body||null, opts.prefer||'');
   }
+
+  // Reads: always use anon key directly
   const key = SUPABASE_ANON;
   const res = await fetch(SUPABASE_URL+'/rest/v1/'+path, {
-    ...opts,
+    method: 'GET',
     headers:{
-      'apikey': key,
+      'apikey':        key,
       'Authorization': 'Bearer '+key,
-      'Content-Type': 'application/json',
-      'Prefer': opts.prefer||'',
-      ...(opts.headers||{})
+      'Content-Type':  'application/json',
+      'Prefer':        opts.prefer || (opts.headers&&opts.headers['Prefer']) || '',
+      'Range':         (opts.headers&&opts.headers['Range']) || ''
     }
   });
   if(!res.ok){
@@ -499,22 +506,17 @@ async function sbFetch(path, opts={}, useService=false){
   return null;
 }
 
-// Calls the Edge Function proxy (service key lives only server-side)
-async function sbProxy(path, opts={}){
+// Edge Function proxy — service key lives only in Supabase Secrets
+async function sbProxy(path, method, body, prefer){
   const res = await fetch(SUPABASE_URL+'/functions/v1/prompts-proxy', {
     method: 'POST',
     headers:{
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_ANON,
-      'Authorization': 'Bearer '+SUPABASE_ANON,
+      'Content-Type':    'application/json',
+      'apikey':          SUPABASE_ANON,
+      'Authorization':   'Bearer '+SUPABASE_ANON,
       'x-edit-password': EDIT_PASSWORD
     },
-    body: JSON.stringify({
-      path,
-      method:  opts.method  || 'GET',
-      body:    opts.body    || null,
-      prefer:  opts.prefer  || ''
-    })
+    body: JSON.stringify({ path, method, body, prefer: prefer||'' })
   });
   if(!res.ok){
     const txt = await res.text();
