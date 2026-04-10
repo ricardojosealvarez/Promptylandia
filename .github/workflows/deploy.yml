@@ -1,8 +1,11 @@
-name: Deploy
+name: Inject and Deploy
 
 on:
   push:
     branches: [ main ]
+
+permissions:
+  contents: write
 
 jobs:
   deploy:
@@ -17,9 +20,10 @@ jobs:
           sed -i "s|SUPABASE_SERVICE_PLACEHOLDER|${{ secrets.SUPABASE_SERVICE }}|g" index.html
           sed -i "s|EDIT_PASSWORD_PLACEHOLDER|${{ secrets.EDIT_PASSWORD }}|g" index.html
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./
-          publish_branch: gh-pages
+      - name: Commit injected file
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add index.html
+          git diff --staged --quiet || git commit -m "chore: inject secrets [skip ci]"
+          git push
