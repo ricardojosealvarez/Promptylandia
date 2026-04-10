@@ -227,6 +227,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-edit" onclick="requireAuth()">&#x270E; Editar base</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.4.0</div>
   </div>
 </div>
 
@@ -430,10 +431,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
-const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
-const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjkzNjUsImV4cCI6MjA5MTM0NTM2NX0.qoLwcxscyncUCbkeYxZqIuopzqkNn9LEF8yIimHeBkU';
-const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc2OTM2NSwiZXhwIjoyMDkxMzQ1MzY1fQ.nBrW06bD0vbDsupXeS7f_yR0oZgs4omvNWbM6KAO4Ig';
-const EDIT_PASSWORD    = 'G4t3k33p3r.';
+const SUPABASE_URL     = 'SUPABASE_URL_PLACEHOLDER';
+const SUPABASE_ANON    = 'SUPABASE_ANON_PLACEHOLDER';
+const SUPABASE_SERVICE = 'SUPABASE_SERVICE_PLACEHOLDER';
+const EDIT_PASSWORD    = 'EDIT_PASSWORD_PLACEHOLDER';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -804,19 +805,26 @@ function renderPag(containerId, current, total, callbackName){
 
 // ── MODAL ─────────────────────────────────────────────────────────
 function buildModalDropdowns(cat,sub,ia){
+  // Build selects without relying on 'selected' attribute —
+  // assign .value after innerHTML is set, which is reliable across browsers.
   const mCat=document.getElementById('m-cat');
   mCat.innerHTML='<option value="">— Selecciona —</option>';
-  CATS.forEach(c=>mCat.insertAdjacentHTML('beforeend','<option value="'+esc(c)+'"'+(c===cat?' selected':'')+'>'+esc(c)+'</option>'));
-  populateModalSub(cat,sub);
+  CATS.forEach(c=>mCat.insertAdjacentHTML('beforeend','<option value="'+esc(c)+'">'+esc(c)+'</option>'));
+  mCat.value = cat || '';
+
+  populateModalSub(cat, sub);
+
   const mIa=document.getElementById('m-ia');
   mIa.innerHTML='<option value="">— Selecciona —</option>';
-  IAS.forEach(i=>mIa.insertAdjacentHTML('beforeend','<option value="'+esc(i)+'"'+(i===ia?' selected':'')+'>'+esc(i)+'</option>'));
+  IAS.forEach(i=>mIa.insertAdjacentHTML('beforeend','<option value="'+esc(i)+'">'+esc(i)+'</option>'));
+  mIa.value = ia || '';
 }
-function populateModalSub(cat,sel){
+function populateModalSub(cat, sel){
   const s=document.getElementById('m-sub');
   s.innerHTML='<option value="">— Selecciona —</option>';
   const list=cat?(SUBCATS[cat]||[]):[...new Set(Object.values(SUBCATS).flat())].sort();
-  list.forEach(x=>s.insertAdjacentHTML('beforeend','<option value="'+esc(x)+'"'+(x===sel?' selected':'')+'>'+esc(x)+'</option>'));
+  list.forEach(x=>s.insertAdjacentHTML('beforeend','<option value="'+esc(x)+'">'+esc(x)+'</option>'));
+  s.value = sel || '';
 }
 function onModalCatChange(){ populateModalSub(document.getElementById('m-cat').value,''); }
 function addNewCat(){
