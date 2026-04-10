@@ -430,10 +430,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
-const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
-const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjkzNjUsImV4cCI6MjA5MTM0NTM2NX0.qoLwcxscyncUCbkeYxZqIuopzqkNn9LEF8yIimHeBkU';
-const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc2OTM2NSwiZXhwIjoyMDkxMzQ1MzY1fQ.nBrW06bD0vbDsupXeS7f_yR0oZgs4omvNWbM6KAO4Ig';
-const EDIT_PASSWORD    = 'G4t3k33p3r.';
+const SUPABASE_URL     = 'SUPABASE_URL_PLACEHOLDER';
+const SUPABASE_ANON    = 'SUPABASE_ANON_PLACEHOLDER';
+const SUPABASE_SERVICE = 'SUPABASE_SERVICE_PLACEHOLDER';
+const EDIT_PASSWORD    = 'EDIT_PASSWORD_PLACEHOLDER';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -751,11 +751,15 @@ async function loadEditPage(page){
   }
 }
 
+// Cache for current edit page rows — avoids passing complex objects via onclick attributes
+let _editRowCache = [];
+
 function renderEditRows(rows, offset=0){
+  _editRowCache = rows;   // store for openModal/askDelete reference by index
   const tbody=document.getElementById('editTbody');
   if(!rows.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-dimmer);">Sin resultados</td></tr>';return;}
   tbody.innerHTML=rows.map((r,i)=>{
-    const pos=offset+i+1;   // 1-based position in current filtered set
+    const pos=offset+i+1;
     const pp=r.prompt.length>80?r.prompt.slice(0,80)+'…':r.prompt;
     const np=(r.notas||'').length>40?(r.notas||'').slice(0,40)+'…':(r.notas||'');
     return '<tr>'+
@@ -767,10 +771,17 @@ function renderEditRows(rows, offset=0){
       '<td class="td-prompt" title="'+esc(r.prompt)+'">'+esc(pp)+'</td>'+
       '<td class="td-notas" title="'+esc(r.notas||'')+'">'+esc(np)+'</td>'+
       '<td class="td-actions">'+
-        '<button class="btn btn-edit" onclick="openModal('+JSON.stringify(r)+')">&#x270E; Editar</button>'+
-        '<button class="btn btn-sm-danger" onclick="askDelete('+r.id+','+JSON.stringify(esc(r.nombre))+')">&#x1F5D1;</button>'+
+        '<button class="btn btn-edit" onclick="openModalByIdx('+i+')">&#x270E; Editar</button>'+
+        '<button class="btn btn-sm-danger" onclick="askDeleteByIdx('+i+')">&#x1F5D1;</button>'+
       '</td></tr>';
   }).join('');
+}
+
+// Safe wrappers that retrieve row data from cache by index
+function openModalByIdx(i){ openModal(_editRowCache[i]); }
+function askDeleteByIdx(i){
+  const r=_editRowCache[i];
+  askDelete(r.id, r.nombre);
 }
 
 // ── PAGINATION (shared) ───────────────────────────────────────────
@@ -889,7 +900,7 @@ async function saveModal(){
 // ── DELETE ────────────────────────────────────────────────────────
 function askDelete(id,nombre){
   deleteId=id;
-  document.getElementById('confirmMsg').innerHTML='¿Eliminar <strong>'+nombre+'</strong>? (ID: '+id+')';
+  document.getElementById('confirmMsg').innerHTML='¿Eliminar <strong>'+esc(nombre)+'</strong>?';
   document.getElementById('confirmOverlay').classList.add('open');
 }
 function closeConfirm(){ document.getElementById('confirmOverlay').classList.remove('open'); deleteId=null; }
