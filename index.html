@@ -227,7 +227,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-edit" onclick="requireAuth()">&#x270E; Editar base</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.4.1</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.4.2</div>
   </div>
 </div>
 
@@ -431,10 +431,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
-const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
-const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjkzNjUsImV4cCI6MjA5MTM0NTM2NX0.qoLwcxscyncUCbkeYxZqIuopzqkNn9LEF8yIimHeBkU';
-const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc2OTM2NSwiZXhwIjoyMDkxMzQ1MzY1fQ.nBrW06bD0vbDsupXeS7f_yR0oZgs4omvNWbM6KAO4Ig';
-const EDIT_PASSWORD    = 'G4t3k33p3r.';
+const SUPABASE_URL     = 'SUPABASE_URL_PLACEHOLDER';
+const SUPABASE_ANON    = 'SUPABASE_ANON_PLACEHOLDER';
+const SUPABASE_SERVICE = 'SUPABASE_SERVICE_PLACEHOLDER';
+const EDIT_PASSWORD    = 'EDIT_PASSWORD_PLACEHOLDER';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -804,36 +804,41 @@ function renderPag(containerId, current, total, callbackName){
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────
+// Normalize unicode to NFC so DB values and static arrays always match
+function norm(s){ return s ? s.normalize('NFC') : ''; }
+
 function buildModalDropdowns(cat,sub,ia){
-  // value attributes store raw text (no HTML escaping) so .value assignment matches exactly.
-  // Display text uses esc() for safe rendering only.
+  const catN=norm(cat), subN=norm(sub), iaN=norm(ia);
   const mCat=document.getElementById('m-cat');
   mCat.innerHTML='<option value="">— Selecciona —</option>';
   CATS.forEach(c=>{
     const o=document.createElement('option');
-    o.value=c; o.textContent=c; mCat.appendChild(o);
+    o.value=norm(c); o.textContent=c; mCat.appendChild(o);
   });
-  mCat.value = cat || '';
+  mCat.value = catN;
 
-  populateModalSub(cat, sub);
+  populateModalSub(catN, subN);
 
   const mIa=document.getElementById('m-ia');
   mIa.innerHTML='<option value="">— Selecciona —</option>';
   IAS.forEach(i=>{
     const o=document.createElement('option');
-    o.value=i; o.textContent=i; mIa.appendChild(o);
+    o.value=norm(i); o.textContent=i; mIa.appendChild(o);
   });
-  mIa.value = ia || '';
+  mIa.value = iaN;
 }
 function populateModalSub(cat, sel){
   const s=document.getElementById('m-sub');
   s.innerHTML='<option value="">— Selecciona —</option>';
-  const list=cat?(SUBCATS[cat]||[]):[...new Set(Object.values(SUBCATS).flat())].sort();
+  const catN=norm(cat);
+  // Match SUBCATS key with normalization
+  const key=Object.keys(SUBCATS).find(k=>norm(k)===catN) || catN;
+  const list=catN?(SUBCATS[key]||[]):[...new Set(Object.values(SUBCATS).flat())].sort();
   list.forEach(x=>{
     const o=document.createElement('option');
-    o.value=x; o.textContent=x; s.appendChild(o);
+    o.value=norm(x); o.textContent=x; s.appendChild(o);
   });
-  s.value = sel || '';
+  s.value = norm(sel);
 }
 function onModalCatChange(){ populateModalSub(document.getElementById('m-cat').value,''); }
 function addNewCat(){
