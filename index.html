@@ -227,7 +227,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-edit" onclick="requireAuth()">&#x270E; Editar base</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.4.4</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.4.5</div>
   </div>
 </div>
 
@@ -431,10 +431,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
-const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
-const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjkzNjUsImV4cCI6MjA5MTM0NTM2NX0.qoLwcxscyncUCbkeYxZqIuopzqkNn9LEF8yIimHeBkU';
-const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc2OTM2NSwiZXhwIjoyMDkxMzQ1MzY1fQ.nBrW06bD0vbDsupXeS7f_yR0oZgs4omvNWbM6KAO4Ig';
-const EDIT_PASSWORD    = 'G4t3k33p3r.';
+const SUPABASE_URL     = 'SUPABASE_URL_PLACEHOLDER';
+const SUPABASE_ANON    = 'SUPABASE_ANON_PLACEHOLDER';
+const SUPABASE_SERVICE = 'SUPABASE_SERVICE_PLACEHOLDER';
+const EDIT_PASSWORD    = 'EDIT_PASSWORD_PLACEHOLDER';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -533,13 +533,7 @@ async function sbProxy(path, method, body, prefer){
 (async function init(){
   await loadMeta();
   // load total count
-  try{
-    const res = await fetch(SUPABASE_URL+'/rest/v1/prompts?select=id', {
-      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'count=exact','Range':'0-0'}
-    });
-    const count = res.headers.get('content-range')?.split('/')[1]||'?';
-    document.getElementById('totalCount').textContent = parseInt(count).toLocaleString('es-ES');
-  } catch(e){ document.getElementById('totalCount').textContent='?'; }
+  await refreshTotalCount();
 })();
 
 // ── DYNAMIC METADATA ──────────────────────────────────────────────
@@ -581,6 +575,15 @@ async function loadMeta(){
   buildDropdowns('ef-cat','ef-ia', true);
   populateSub('f-sub','');
   populateSub('ef-sub','');
+}
+
+// Always-accurate count via RPC (avoids PostgREST cache issues)
+async function refreshTotalCount(){
+  try{
+    const res = await sbFetch('rpc/get_prompts_count', {method:'GET'}, false);
+    const n = (res !== null && res !== undefined) ? parseInt(res) : NaN;
+    document.getElementById('totalCount').textContent = isNaN(n) ? '?' : n.toLocaleString('es-ES');
+  } catch(e){ document.getElementById('totalCount').textContent='?'; }
 }
 
 function buildDropdowns(catId, iaId, withAll){
@@ -939,6 +942,7 @@ async function confirmDelete(){
     toast('Entrada eliminada.');
     closeConfirm();
     loadEditPage(editCurrentPage);
+    refreshTotalCount();
   } catch(e){ toast('Error: '+e.message,true); closeConfirm(); }
 }
 
@@ -1002,6 +1006,7 @@ async function confirmRangeDelete(){
     document.getElementById('rd-from').value='';
     document.getElementById('rd-to').value='';
     loadEditPage(1);
+    refreshTotalCount();
   } catch(e){ toast('Error: '+e.message,true); closeConfirmRange(); }
 }
 
