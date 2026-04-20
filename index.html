@@ -229,7 +229,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-edit" onclick="requireAuth()">&#x270E; Editar base</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.4.6</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.5.0</div>
   </div>
 </div>
 
@@ -433,10 +433,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
-const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
-const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjkzNjUsImV4cCI6MjA5MTM0NTM2NX0.qoLwcxscyncUCbkeYxZqIuopzqkNn9LEF8yIimHeBkU';
-const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc2OTM2NSwiZXhwIjoyMDkxMzQ1MzY1fQ.nBrW06bD0vbDsupXeS7f_yR0oZgs4omvNWbM6KAO4Ig';
-const EDIT_PASSWORD    = 'G4t3k33p3r.';
+const SUPABASE_URL     = 'SUPABASE_URL_PLACEHOLDER';
+const SUPABASE_ANON    = 'SUPABASE_ANON_PLACEHOLDER';
+const SUPABASE_SERVICE = 'SUPABASE_SERVICE_PLACEHOLDER';
+const EDIT_PASSWORD    = 'EDIT_PASSWORD_PLACEHOLDER';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -640,6 +640,86 @@ function switchTab(tab){
 // ── SEARCH ───────────────────────────────────────────────────────
 let searchPage=1, searchTotal=0, _sTokens={n:[],p:[]}, _sParams={};
 
+const STOPWORDS = new Set([
+  'el','la','los','las','un','una','unos','unas','de','del','al','a','ante','bajo',
+  'con','contra','desde','en','entre','hacia','hasta','para','por','según','sin',
+  'sobre','tras','y','e','o','u','ni','que','se','su','sus','le','les','me','te',
+  'nos','lo','les','mi','mis','tu','tus','es','son','fue','ser','como','más','pero',
+  'si','ya','hay','esto','esta','ese','esa','eso','este','has','han','he','hemos'
+]);
+
+// ── SCORING ───────────────────────────────────────────────────────
+// Weights: exact phrase > all words any order > partial word matches
+// Nombre scores 3x vs Prompt
+const W = {
+  NOMBRE_PHRASE:   300,  // exact phrase in nombre
+  NOMBRE_ALL:      150,  // all tokens present in nombre (any order)
+  NOMBRE_TOKEN:     40,  // each individual token hit in nombre
+  NOMBRE_STARTS:    20,  // token at word boundary in nombre
+  PROMPT_PHRASE:   100,  // exact phrase in prompt
+  PROMPT_ALL:       50,  // all tokens present in prompt
+  PROMPT_TOKEN:     10,  // each individual token hit in prompt
+  PROMPT_REPEAT:     2,  // bonus per additional occurrence in prompt
+};
+
+function tokenizeQuery(raw){
+  // Split into tokens, filter stopwords for single-word scoring
+  // but keep original phrase for exact-phrase check
+  const phrase = raw.toLowerCase().trim();
+  const all = phrase.split(/\s+/).filter(t => t.length > 1);
+  const meaningful = all.filter(t => !STOPWORDS.has(t));
+  return { phrase, all, meaningful };
+}
+
+function scoreRecord(rec, nTokens, pTokens){
+  let score = 0;
+  const rn = rec.nombre.toLowerCase();
+  const rp = rec.prompt.toLowerCase();
+
+  // ── NOMBRE scoring ──
+  if(nTokens.all.length){
+    const phrase = nTokens.phrase;
+    // Exact phrase
+    if(rn.includes(phrase)) score += W.NOMBRE_PHRASE;
+    // All tokens present (any order)
+    else if(nTokens.all.every(t => rn.includes(t))) score += W.NOMBRE_ALL;
+    // Individual meaningful tokens
+    nTokens.meaningful.forEach(t => {
+      if(rn.includes(t)){
+        score += W.NOMBRE_TOKEN;
+        // Bonus if at word start
+        if(rn.startsWith(t) || rn.includes(' '+t)) score += W.NOMBRE_STARTS;
+      }
+    });
+  }
+
+  // ── PROMPT scoring ──
+  if(pTokens.all.length){
+    const phrase = pTokens.phrase;
+    if(rp.includes(phrase)) score += W.PROMPT_PHRASE;
+    else if(pTokens.all.every(t => rp.includes(t))) score += W.PROMPT_ALL;
+    pTokens.meaningful.forEach(t => {
+      const re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');
+      const hits = (rp.match(re)||[]).length;
+      if(hits > 0){
+        score += W.PROMPT_TOKEN;
+        score += Math.min(hits - 1, 5) * W.PROMPT_REPEAT;
+      }
+    });
+  }
+
+  // ── Cross-field bonus: phrase appears in both ──
+  if(nTokens.all.length && pTokens.all.length){
+    if(nTokens.all.every(t=>rn.includes(t)) && pTokens.all.every(t=>rp.includes(t)))
+      score += 30;
+  }
+
+  return score;
+}
+
+// Cached ranked results for client-side pagination
+let _rankedResults = [];
+
 async function doSearch(){
   const fc=document.getElementById('f-cat').value,
         fs=document.getElementById('f-sub').value,
@@ -649,8 +729,14 @@ async function doSearch(){
   const err=document.getElementById('errorMsg');
   if(!fc&&!fs&&!fi&&!fn&&!fp){ err.style.display='inline'; return; }
   err.style.display='none';
-  _sTokens={n:fn?tok(fn):[],p:fp?tok(fp):[]};
-  _sParams={fc,fs,fi,fn,fp};
+
+  const nT = fn ? tokenizeQuery(fn) : {phrase:'',all:[],meaningful:[]};
+  const pT = fp ? tokenizeQuery(fp) : {phrase:'',all:[],meaningful:[]};
+  _sTokens = {
+    n: nT.meaningful.length ? nT.meaningful : nT.all,
+    p: pT.meaningful.length ? pT.meaningful : pT.all
+  };
+  _sParams={fc,fs,fi,fn,fp,nT,pT};
   searchPage=1;
   await runSearch();
 }
@@ -659,43 +745,83 @@ async function runSearch(){
   setLoading('results',true);
   document.getElementById('rh').style.display='none';
   document.getElementById('pag').style.display='none';
-  const {fc,fs,fi,fn,fp}=_sParams;
+  const {fc,fs,fi,fn,fp,nT,pT}=_sParams;
+  const needsRanking = (fn||fp) ? true : false;
+
   try{
-    // Build query
+    // Build DB filter — OR across all meaningful tokens for max recall
     let q='prompts?select=*';
     if(fc) q+='&categoria=eq.'+encodeURIComponent(fc);
     if(fs) q+='&subcategoria=eq.'+encodeURIComponent(fs);
     if(fi) q+='&ia=eq.'+encodeURIComponent(fi);
-    if(fn) q+='&nombre=ilike.'+encodeURIComponent('%'+fn+'%');
-    if(fp) q+='&prompt=ilike.'+encodeURIComponent('%'+fp+'%');
-    q+='&order=nombre.asc';
-    // Get count first
-    const countRes = await fetch(SUPABASE_URL+'/rest/v1/'+q, {
-      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'count=exact','Range':'0-0'}
-    });
-    searchTotal = parseInt(countRes.headers.get('content-range')?.split('/')[1]||'0');
-    // Get page
-    const start=(searchPage-1)*PAGE_SIZE, end=start+PAGE_SIZE-1;
-    const data = await sbFetch(q, {headers:{'Range':start+'-'+end,'Prefer':''}});
-    renderSearchResults(data||[], searchTotal);
+
+    if(needsRanking){
+      // Fetch ALL candidates matching any token, let client rank
+      // Build OR filter: nombre or prompt contains any meaningful token
+      const nTerms = nT.all;
+      const pTerms = pT.all;
+      const orClauses = [];
+      nTerms.forEach(t => orClauses.push('nombre.ilike.'+encodeURIComponent('%'+t+'%')));
+      pTerms.forEach(t => orClauses.push('prompt.ilike.'+encodeURIComponent('%'+t+'%')));
+      if(orClauses.length) q+='&or=('+orClauses.join(',')+')';
+      q+='&order=id.asc';
+
+      // Fetch all pages
+      let all=[], page=0, done=false;
+      while(!done){
+        const start=page*1000, end=start+999;
+        const rows=await sbFetch(q,{headers:{'Range':start+'-'+end,'Prefer':''}},false);
+        if(!rows||!rows.length){done=true;break;}
+        all=all.concat(rows);
+        if(rows.length<1000) done=true; else page++;
+      }
+
+      // Score and rank client-side
+      _rankedResults = all
+        .map(rec => ({rec, score: scoreRecord(rec, nT, pT)}))
+        .filter(x => x.score > 0)
+        .sort((a,b) => b.score - a.score);
+
+      searchTotal = _rankedResults.length;
+    } else {
+      // Dropdowns-only search: no ranking needed, use server pagination
+      q+='&order=nombre.asc';
+      const countRes = await fetch(SUPABASE_URL+'/rest/v1/'+q, {
+        headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'count=exact','Range':'0-0'}
+      });
+      searchTotal = parseInt(countRes.headers.get('content-range')?.split('/')[1]||'0');
+      const start=(searchPage-1)*PAGE_SIZE, end=start+PAGE_SIZE-1;
+      const data = await sbFetch(q,{headers:{'Range':start+'-'+end,'Prefer':''}},false);
+      _rankedResults = (data||[]).map(rec=>({rec, score:0}));
+    }
+
+    renderSearchResults();
   } catch(e){
     document.getElementById('results').innerHTML='<div class="empty"><div class="icon">&#x26A0;</div><h3>Error</h3><p>'+esc(e.message)+'</p></div>';
   }
 }
 
-function renderSearchResults(rows, total){
-  const tp=Math.ceil(total/PAGE_SIZE);
+function renderSearchResults(){
+  const total = searchTotal;
+  const tp = Math.ceil(total/PAGE_SIZE);
   document.getElementById('rh').style.display='flex';
   document.getElementById('rcount').innerHTML=total.toLocaleString('es-ES');
   document.getElementById('pinfo').textContent=tp>1?' · página '+searchPage+' de '+tp:'';
   const con=document.getElementById('results');
-  if(!rows.length){
+  if(!total){
     con.innerHTML='<div class="empty"><div class="icon">&#x2298;</div><h3>Sin resultados</h3><p>Prueba con otros filtros.</p></div>';
     document.getElementById('pag').style.display='none'; return;
   }
+  const start=(searchPage-1)*PAGE_SIZE, end=Math.min(start+PAGE_SIZE, total);
+  const page = _rankedResults.slice(start, end);
   const allT=[..._sTokens.n,..._sTokens.p];
-  con.innerHTML=rows.map((rec,i)=>{
+  const topScore = _rankedResults[0]?.score || 0;
+
+  con.innerHTML=page.map(({rec,score},i)=>{
     const hasN=rec.notas&&rec.notas.trim();
+    const scoreBadge = score>0
+      ? '<span style="font-family:var(--mono);font-size:9px;color:var(--text-dimmer);align-self:center;white-space:nowrap;opacity:.6">#'+score+'</span>'
+      : '';
     return '<div class="card">'+
       '<div class="card-main">'+
         '<div class="cell"><span class="clabel">Categoría</span><span class="tag tc">'+esc(rec.categoria)+'</span></div>'+
@@ -704,6 +830,7 @@ function renderSearchResults(rows, total){
         '<div class="cell"><span class="clabel">Nombre</span><span class="cval nm">'+hl(rec.nombre,_sTokens.n)+'</span></div>'+
         '<div class="cell"><span class="clabel">Prompt</span><span class="cval pr">'+hl(rec.prompt,allT)+'</span></div>'+
         '<button class="btn-ver" id="pb-'+i+'" onclick="togglePrompt('+i+')">&#x25BC; Ver</button>'+
+        scoreBadge+
       '</div>'+
       '<div class="prompt-full" id="pf-'+i+'">'+hl(rec.prompt,allT)+'</div>'+
       (hasN?'<div class="notas-row has-notas"><span class="notas-label">Notas</span><span>'+esc(rec.notas)+'</span></div>':'')+
@@ -720,7 +847,12 @@ function togglePrompt(i){
 }
 
 async function goSearchPage(p){
-  searchPage=p; await runSearch();
+  const tp=Math.ceil(searchTotal/PAGE_SIZE);
+  if(p<1||p>tp) return;
+  searchPage=p;
+  // If ranked results are cached, just re-render the page slice
+  if(_rankedResults.length) renderSearchResults();
+  else await runSearch();
   document.querySelector('.topbar').scrollIntoView({behavior:'smooth'});
 }
 
