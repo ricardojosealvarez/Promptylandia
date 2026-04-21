@@ -92,6 +92,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:4px;cursor:pointer;
   white-space:nowrap;align-self:center;transition:color .15s,border-color .15s;}
 .btn-ver:hover{color:var(--accent2);border-color:var(--accent);}
+.btn-copy{background:transparent;border:1px solid var(--border2);color:var(--text-dimmer);
+  font-family:var(--mono);font-size:10px;padding:4px 12px;border-radius:4px;cursor:pointer;
+  white-space:nowrap;transition:color .15s,border-color .15s,background .15s;}
+.btn-copy:hover{color:var(--accent2);border-color:var(--accent);background:var(--accent-glow);}
 .prompt-full{display:none;margin-top:10px;padding:12px 14px;background:#0d1018;border:1px solid var(--border2);
   border-radius:6px;font-size:12.5px;color:var(--text-dim);white-space:pre-wrap;line-height:1.75;word-break:break-word;}
 .prompt-full.open{display:block;}
@@ -229,7 +233,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-edit" onclick="requireAuth()">&#x270E; Editar base</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.5.0</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.5.1</div>
   </div>
 </div>
 
@@ -433,10 +437,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
-const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
-const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjkzNjUsImV4cCI6MjA5MTM0NTM2NX0.qoLwcxscyncUCbkeYxZqIuopzqkNn9LEF8yIimHeBkU';
-const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc2OTM2NSwiZXhwIjoyMDkxMzQ1MzY1fQ.nBrW06bD0vbDsupXeS7f_yR0oZgs4omvNWbM6KAO4Ig';
-const EDIT_PASSWORD    = 'G4t3k33p3r.';
+const SUPABASE_URL     = 'SUPABASE_URL_PLACEHOLDER';
+const SUPABASE_ANON    = 'SUPABASE_ANON_PLACEHOLDER';
+const SUPABASE_SERVICE = 'SUPABASE_SERVICE_PLACEHOLDER';
+const EDIT_PASSWORD    = 'EDIT_PASSWORD_PLACEHOLDER';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -832,7 +836,12 @@ function renderSearchResults(){
         '<button class="btn-ver" id="pb-'+i+'" onclick="togglePrompt('+i+')">&#x25BC; Ver</button>'+
         scoreBadge+
       '</div>'+
-      '<div class="prompt-full" id="pf-'+i+'">'+hl(rec.prompt,allT)+'</div>'+
+      '<div class="prompt-full" id="pf-'+i+'">'+
+        '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">'+
+          '<button class="btn-copy" id="cp-'+i+'" onclick="copyPrompt('+i+')">&#x2398; Copiar prompt</button>'+
+        '</div>'+
+        hl(rec.prompt,allT)+
+      '</div>'+
       (hasN?'<div class="notas-row has-notas"><span class="notas-label">Notas</span><span>'+esc(rec.notas)+'</span></div>':'')+
       '</div>';
   }).join('');
@@ -844,6 +853,24 @@ function togglePrompt(i){
   if(!el) return;
   const open=el.classList.toggle('open');
   btn.textContent=open?'▲ Contraer':'▼ Ver';
+}
+
+async function copyPrompt(i){
+  const start=(searchPage-1)*PAGE_SIZE;
+  const rec=_rankedResults[start+i]?.rec;
+  if(!rec) return;
+  const btn=document.getElementById('cp-'+i);
+  const reset=()=>{ btn.innerHTML='&#x2398; Copiar prompt'; btn.style.color=''; btn.style.borderColor=''; };
+  try{
+    await navigator.clipboard.writeText(rec.prompt);
+    btn.textContent='✓ Copiado'; btn.style.color='var(--green)'; btn.style.borderColor='var(--green)';
+    setTimeout(reset,2000);
+  } catch(e){
+    const ta=document.createElement('textarea');
+    ta.value=rec.prompt; ta.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    btn.textContent='✓ Copiado'; setTimeout(reset,2000);
+  }
 }
 
 async function goSearchPage(p){
