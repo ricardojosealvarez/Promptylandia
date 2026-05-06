@@ -439,8 +439,6 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
 const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
 const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjkzNjUsImV4cCI6MjA5MTM0NTM2NX0.qoLwcxscyncUCbkeYxZqIuopzqkNn9LEF8yIimHeBkU';
-const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbHJieHFqa3NscGpsdW12ZWx2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc2OTM2NSwiZXhwIjoyMDkxMzQ1MzY1fQ.nBrW06bD0vbDsupXeS7f_yR0oZgs4omvNWbM6KAO4Ig';
-const EDIT_PASSWORD    = 'G4t3k33p3r.';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -450,6 +448,7 @@ const PAGE_SIZE      = 50;
 const EDIT_PAGE_SIZE = 100;
 
 let authenticated = false;
+let editPassword = '';
 let editCurrentPage = 1;
 let editTotalCount  = 0;
 let deleteId  = null;
@@ -521,7 +520,7 @@ async function sbProxy(path, method, body, prefer){
       'Content-Type':    'application/json',
       'apikey':          SUPABASE_ANON,
       'Authorization':   'Bearer '+SUPABASE_ANON,
-      'x-edit-password': EDIT_PASSWORD
+      'x-edit-password': editPassword
     },
     body: JSON.stringify({ path, method, body, prefer: prefer||'' })
   });
@@ -620,16 +619,35 @@ function requireAuth(){
   setTimeout(()=>document.getElementById('loginPwd').focus(),100);
 }
 function doLogin(){
-  if(document.getElementById('loginPwd').value === EDIT_PASSWORD){
-    authenticated=true;
-    document.getElementById('loginOverlay').classList.add('hidden');
-    document.getElementById('loginPwd').value='';
-    document.getElementById('loginError').textContent='';
-    switchTab('edit');
-  } else {
-    document.getElementById('loginError').textContent='Contraseña incorrecta.';
-    document.getElementById('loginPwd').value='';
+  const pwd = document.getElementById('loginPwd').value.trim();
+  if(!pwd){
+    document.getElementById('loginError').textContent='Introduce la contraseña.';
+    return;
   }
+  editPassword=pwd;
+  authenticated=true;
+  document.getElementById('loginOverlay').classList.add('hidden');
+  document.getElementById('loginPwd').value='';
+  document.getElementById('loginError').textContent='';
+  switchTab('edit');
+}
+function clearAuth(){
+  authenticated=false;
+  editPassword='';
+  document.getElementById('loginPwd').value='';
+  document.getElementById('loginError').textContent='Contraseña incorrecta.';
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('loginPwd').focus(),100);
+}
+function handleAuthError(e, targetEl){
+  const msg = e && e.message ? e.message : '';
+  if(msg.includes('401') || msg.includes('403')){
+    clearAuth();
+    if(targetEl) targetEl.textContent='Contraseña incorrecta.';
+    else toast('Contraseña incorrecta.', true);
+    return true;
+  }
+  return false;
 }
 
 // ── TABS ─────────────────────────────────────────────────────────
@@ -912,13 +930,13 @@ async function loadEditPage(page){
     if(fq) q+='&nombre=ilike.'+encodeURIComponent('%'+fq+'%');
     q+='&order=id.asc';
     const countRes=await fetch(SUPABASE_URL+'/rest/v1/'+q,{
-      headers:{'apikey':SUPABASE_SERVICE,'Authorization':'Bearer '+SUPABASE_SERVICE,'Prefer':'count=exact','Range':'0-0'}
+      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'count=exact','Range':'0-0'}
     });
     editTotalCount=parseInt(countRes.headers.get('content-range')?.split('/')[1]||'0');
     document.getElementById('editSubtitle').textContent=editTotalCount.toLocaleString('es-ES')+' entradas';
     document.getElementById('editCount').textContent=editTotalCount.toLocaleString('es-ES')+' mostradas';
     const start=(page-1)*EDIT_PAGE_SIZE, end=start+EDIT_PAGE_SIZE-1;
-    const rows=await sbFetch(q,{headers:{'Range':start+'-'+end,'Prefer':''},prefer:''},true);
+    const rows=await sbFetch(q,{headers:{'Range':start+'-'+end,'Prefer':''},prefer:''},false);
     renderEditRows(rows||[], start);
     renderPag('editPag', page, Math.ceil(editTotalCount/EDIT_PAGE_SIZE), 'loadEditPage');
   } catch(e){
@@ -1087,7 +1105,10 @@ async function saveModal(){
     }
     closeModal();
     loadEditPage(editCurrentPage);
-  } catch(e){ errEl.textContent='Error: '+e.message; }
+  } catch(e){
+    if(handleAuthError(e, errEl)) return;
+    errEl.textContent='Error: '+e.message;
+  }
 }
 
 // ── DELETE ────────────────────────────────────────────────────────
@@ -1104,7 +1125,10 @@ async function confirmDelete(){
     closeConfirm();
     loadEditPage(editCurrentPage);
     refreshTotalCount();
-  } catch(e){ toast('Error: '+e.message,true); closeConfirm(); }
+  } catch(e){
+    if(handleAuthError(e)) return;
+    toast('Error: '+e.message,true); closeConfirm();
+  }
 }
 
 // ── RANGE DELETE (by position) ───────────────────────────────────
@@ -1168,7 +1192,10 @@ async function confirmRangeDelete(){
     document.getElementById('rd-to').value='';
     loadEditPage(1);
     refreshTotalCount();
-  } catch(e){ toast('Error: '+e.message,true); closeConfirmRange(); }
+  } catch(e){
+    if(handleAuthError(e)) return;
+    toast('Error: '+e.message,true); closeConfirmRange();
+  }
 }
 
 // ── IMPORT EXCEL ──────────────────────────────────────────────────
@@ -1231,7 +1258,10 @@ async function processImportBuffer(buffer,filename){
     try{
       await sbFetch('prompts',{method:'POST',body:JSON.stringify(batch),prefer:'return=minimal'},true);
       added+=batch.length;
-    } catch(e){ errors.push('Error insertando lote: '+e.message); }
+    } catch(e){
+      if(handleAuthError(e)) return;
+      errors.push('Error insertando lote: '+e.message);
+    }
   }
   if(added>0){
     const c=parseInt(document.getElementById('totalCount').textContent.replace(/[^0-9]/g,''))||0;
