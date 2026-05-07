@@ -189,7 +189,8 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 .login-box .logo-mark{width:48px;height:48px;font-size:18px;margin:0 auto 16px;}
 .login-box h2{font-size:18px;font-weight:700;margin-bottom:6px;}
 .login-box p{font-size:12px;color:var(--text-dimmer);margin-bottom:22px;font-family:var(--mono);}
-.login-box input{margin-bottom:12px;text-align:center;letter-spacing:2px;}
+.login-box input{margin-bottom:12px;text-align:center;}
+.login-box input[type=password]{letter-spacing:2px;}
 .login-error{color:var(--red);font-size:11px;font-family:var(--mono);margin-top:8px;min-height:16px;}
 /* toast */
 .toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--green);
@@ -216,7 +217,8 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
     <h2>Acceso a Edición</h2>
     <p>ÁREA RESTRINGIDA</p>
     <div class="fg">
-      <input type="password" id="loginPwd" placeholder="Contraseña" onkeydown="if(event.key==='Enter')doLogin()" />
+      <input type="text" id="loginEmail" placeholder="Email" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()" />
+      <input type="password" id="loginPwd" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
     </div>
     <button class="btn btn-primary" style="width:100%;margin-top:4px;" onclick="doLogin()">Entrar</button>
     <div class="login-error" id="loginError"></div>
@@ -448,7 +450,7 @@ const PAGE_SIZE      = 50;
 const EDIT_PAGE_SIZE = 100;
 
 let authenticated = false;
-let editPassword = '';
+let authSession = null;
 let editCurrentPage = 1;
 let editTotalCount  = 0;
 let deleteId  = null;
@@ -514,13 +516,16 @@ async function sbFetch(path, opts={}, useService=false){
 
 // Edge Function proxy — service key lives only in Supabase Secrets
 async function sbProxy(path, method, body, prefer){
+  if(!authSession || !authSession.access_token){
+    clearAuth('Inicia sesión de nuevo.');
+    throw new Error('401: Unauthorized');
+  }
   const res = await fetch(SUPABASE_URL+'/functions/v1/prompts-proxy', {
     method: 'POST',
     headers:{
       'Content-Type':    'application/json',
       'apikey':          SUPABASE_ANON,
-      'Authorization':   'Bearer '+SUPABASE_ANON,
-      'x-edit-password': editPassword
+      'Authorization':   'Bearer '+authSession.access_token
     },
     body: JSON.stringify({ path, method, body, prefer: prefer||'' })
   });
@@ -612,39 +617,81 @@ function populateSub(selId, cat){
 function onCatChange(){ populateSub('f-sub', document.getElementById('f-cat').value); }
 function onEditCatChange(){ populateSub('ef-sub', document.getElementById('ef-cat').value); loadEditPage(1); }
 
+function restoreAuthSession(){
+  try{
+    const raw = sessionStorage.getItem('promptylandiaAuthSession');
+    if(!raw) return;
+    const session = JSON.parse(raw);
+    if(!session || !session.access_token || !session.expires_at || session.expires_at*1000 <= Date.now()){
+      sessionStorage.removeItem('promptylandiaAuthSession');
+      return;
+    }
+    authSession=session;
+    authenticated=true;
+  } catch(e){
+    sessionStorage.removeItem('promptylandiaAuthSession');
+  }
+}
+restoreAuthSession();
+
 // ── AUTH ─────────────────────────────────────────────────────────
 function requireAuth(){
   if(authenticated){ switchTab('edit'); return; }
   document.getElementById('loginOverlay').classList.remove('hidden');
-  setTimeout(()=>document.getElementById('loginPwd').focus(),100);
+  setTimeout(()=>document.getElementById('loginEmail').focus(),100);
 }
-function doLogin(){
-  const pwd = document.getElementById('loginPwd').value.trim();
-  if(!pwd){
-    document.getElementById('loginError').textContent='Introduce la contraseña.';
+async function doLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const pwd = document.getElementById('loginPwd').value;
+  const err = document.getElementById('loginError');
+  if(!email || !pwd){
+    err.textContent='Introduce email y contraseña.';
     return;
   }
-  editPassword=pwd;
-  authenticated=true;
-  document.getElementById('loginOverlay').classList.add('hidden');
-  document.getElementById('loginPwd').value='';
-  document.getElementById('loginError').textContent='';
-  switchTab('edit');
+  err.textContent='Entrando...';
+  try{
+    const res = await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON
+      },
+      body: JSON.stringify({ email, password: pwd })
+    });
+    if(!res.ok){
+      const txt = await res.text();
+      throw new Error(res.status+': '+txt);
+    }
+    authSession = await res.json();
+    sessionStorage.setItem('promptylandiaAuthSession', JSON.stringify(authSession));
+    authenticated=true;
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('loginPwd').value='';
+    err.textContent='';
+    switchTab('edit');
+  } catch(e){
+    authSession=null;
+    sessionStorage.removeItem('promptylandiaAuthSession');
+    authenticated=false;
+    err.textContent='No se pudo iniciar sesión.';
+    document.getElementById('loginPwd').value='';
+  }
 }
-function clearAuth(){
+function clearAuth(message){
   authenticated=false;
-  editPassword='';
+  authSession=null;
+  sessionStorage.removeItem('promptylandiaAuthSession');
   document.getElementById('loginPwd').value='';
-  document.getElementById('loginError').textContent='Contraseña incorrecta.';
+  document.getElementById('loginError').textContent=message||'Sesión no autorizada.';
   document.getElementById('loginOverlay').classList.remove('hidden');
-  setTimeout(()=>document.getElementById('loginPwd').focus(),100);
+  setTimeout(()=>document.getElementById('loginEmail').focus(),100);
 }
 function handleAuthError(e, targetEl){
   const msg = e && e.message ? e.message : '';
   if(msg.includes('401') || msg.includes('403')){
-    clearAuth();
-    if(targetEl) targetEl.textContent='Contraseña incorrecta.';
-    else toast('Contraseña incorrecta.', true);
+    clearAuth('Sesión no autorizada.');
+    if(targetEl) targetEl.textContent='Sesión no autorizada.';
+    else toast('Sesión no autorizada.', true);
     return true;
   }
   return false;
