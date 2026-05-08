@@ -235,7 +235,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-edit" onclick="requireAuth()">&#x270E; Editar base</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.6.0</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.7.0</div>
   </div>
 </div>
 
@@ -520,6 +520,7 @@ async function sbProxy(path, method, body, prefer){
     clearAuth('Inicia sesión de nuevo.');
     throw new Error('401: Unauthorized');
   }
+  const payload = buildProxyPayload(path, method, body);
   const res = await fetch(SUPABASE_URL+'/functions/v1/prompts-proxy', {
     method: 'POST',
     headers:{
@@ -527,7 +528,7 @@ async function sbProxy(path, method, body, prefer){
       'apikey':          SUPABASE_ANON,
       'Authorization':   'Bearer '+authSession.access_token
     },
-    body: JSON.stringify({ path, method, body, prefer: prefer||'' })
+    body: JSON.stringify(payload)
   });
   if(!res.ok){
     const txt = await res.text();
@@ -539,6 +540,27 @@ async function sbProxy(path, method, body, prefer){
   try{ return JSON.parse(txt); } catch(e){ return null; }
 }
 
+function buildProxyPayload(path, method, body){
+  const parseBody = () => typeof body === 'string' ? JSON.parse(body) : body;
+  if(method==='POST' && path==='prompts'){
+    const data = parseBody();
+    return Array.isArray(data)
+      ? {action:'importPrompts', prompts:data}
+      : {action:'createPrompt', prompt:data};
+  }
+  if(method==='PATCH' && path.startsWith('prompts?id=eq.')){
+    return {action:'updatePrompt', id:parseInt(path.slice('prompts?id=eq.'.length),10), prompt:parseBody()};
+  }
+  if(method==='DELETE' && path.startsWith('prompts?id=eq.')){
+    return {action:'deletePrompt', id:parseInt(path.slice('prompts?id=eq.'.length),10)};
+  }
+  if(method==='DELETE' && path.startsWith('prompts?id=in.(') && path.endsWith(')')){
+    const rawIds = path.slice('prompts?id=in.('.length, -1);
+    return {action:'deletePrompts', ids:rawIds.split(',').map(id=>parseInt(id,10))};
+  }
+  throw new Error('Operación no permitida.');
+}
+
 async function verifyAdminAccess(){
   if(!authSession || !authSession.access_token) return false;
   const res = await fetch(SUPABASE_URL+'/functions/v1/prompts-proxy', {
@@ -548,7 +570,7 @@ async function verifyAdminAccess(){
       'apikey':          SUPABASE_ANON,
       'Authorization':   'Bearer '+authSession.access_token
     },
-    body: JSON.stringify({ path:'__check_admin__', method:'GET' })
+    body: JSON.stringify({ action:'checkAdmin' })
   });
   if(res.ok) return true;
   if(res.status===401 || res.status===403) clearAuth('Solo usuarios admin pueden editar.');
