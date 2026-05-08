@@ -539,6 +539,23 @@ async function sbProxy(path, method, body, prefer){
   try{ return JSON.parse(txt); } catch(e){ return null; }
 }
 
+async function verifyAdminAccess(){
+  if(!authSession || !authSession.access_token) return false;
+  const res = await fetch(SUPABASE_URL+'/functions/v1/prompts-proxy', {
+    method: 'POST',
+    headers:{
+      'Content-Type':    'application/json',
+      'apikey':          SUPABASE_ANON,
+      'Authorization':   'Bearer '+authSession.access_token
+    },
+    body: JSON.stringify({ path:'__check_admin__', method:'GET' })
+  });
+  if(res.ok) return true;
+  if(res.status===401 || res.status===403) clearAuth('Solo usuarios admin pueden editar.');
+  else toast('No se pudo verificar el acceso admin.', true);
+  return false;
+}
+
 // ── INIT ─────────────────────────────────────────────────────────
 (async function init(){
   await loadMeta();
@@ -635,8 +652,11 @@ function restoreAuthSession(){
 restoreAuthSession();
 
 // ── AUTH ─────────────────────────────────────────────────────────
-function requireAuth(){
-  if(authenticated){ switchTab('edit'); return; }
+async function requireAuth(){
+  if(authenticated){
+    if(await verifyAdminAccess()) switchTab('edit');
+    return;
+  }
   document.getElementById('loginOverlay').classList.remove('hidden');
   setTimeout(()=>document.getElementById('loginEmail').focus(),100);
 }
@@ -665,6 +685,11 @@ async function doLogin(){
     authSession = await res.json();
     sessionStorage.setItem('promptylandiaAuthSession', JSON.stringify(authSession));
     authenticated=true;
+    if(!await verifyAdminAccess()){
+      err.textContent='Solo usuarios admin pueden editar.';
+      document.getElementById('loginPwd').value='';
+      return;
+    }
     document.getElementById('loginOverlay').classList.add('hidden');
     document.getElementById('loginPwd').value='';
     err.textContent='';

@@ -54,6 +54,16 @@ serve(async (req) => {
 
   const { path, method, body, prefer } = await req.json()
 
+  if (path === '__check_admin__') {
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: {
+        ...cors,
+        'Content-Type': 'application/json',
+      },
+    })
+  }
+
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     method,
     headers: {
