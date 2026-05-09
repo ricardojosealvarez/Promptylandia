@@ -18,6 +18,11 @@ type PromptInput = {
   notas?: string
 }
 
+type AuthUser = {
+  id: string
+  email?: string
+}
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -90,6 +95,46 @@ const serviceFetch = async (path: string, init: RequestInit = {}) => {
   })
 }
 
+const readJson = async (res: Response) => {
+  const body = await res.text()
+  return body ? JSON.parse(body) : null
+}
+
+const getAccess = async (user: AuthUser) => {
+  const accessRes = await serviceFetch(
+    `user_access?select=user_id,email,status,requested_at,approved_at&user_id=eq.${user.id}&limit=1`,
+    {headers: {'Prefer': ''}},
+  )
+  if (!accessRes.ok) throw new Error('Access check failed')
+
+  const rows = await readJson(accessRes)
+  if (Array.isArray(rows) && rows.length > 0) return rows[0]
+
+  const email = String(user.email || '').toLowerCase()
+  const createRes = await serviceFetch('user_access', {
+    method: 'POST',
+    body: JSON.stringify({user_id: user.id, email, status: 'pending'}),
+  })
+  if (!createRes.ok) throw new Error('Access request failed')
+
+  return {
+    user_id: user.id,
+    email,
+    status: 'pending',
+    requested_at: new Date().toISOString(),
+    approved_at: null,
+  }
+}
+
+const isAdmin = async (userId: string) => {
+  const adminRes = await serviceFetch(`admin_users?select=user_id&user_id=eq.${userId}&limit=1`, {
+    headers: {'Prefer': ''},
+  })
+  if (!adminRes.ok) throw new Error('Admin check failed')
+  const admins = await readJson(adminRes)
+  return Array.isArray(admins) && admins.length > 0
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return text('ok', 200)
   if (req.method !== 'POST') return text('Method not allowed', 405)
@@ -113,14 +158,6 @@ serve(async (req) => {
   const user = await userRes.json()
   if (!user?.id) return text('Unauthorized', 401)
 
-  const adminRes = await serviceFetch(`admin_users?select=user_id&user_id=eq.${user.id}&limit=1`, {
-    headers: {'Prefer': ''},
-  })
-  if (!adminRes.ok) return text('Admin check failed', 500)
-
-  const admins = await adminRes.json()
-  if (!Array.isArray(admins) || admins.length === 0) return text('Forbidden', 403)
-
   let payload: Record<string, unknown>
   try {
     payload = await req.json()
@@ -128,10 +165,55 @@ serve(async (req) => {
     return text('Invalid JSON', 400)
   }
 
+  let access
+  let admin = false
+  try {
+    access = await getAccess(user)
+    admin = await isAdmin(user.id)
+  } catch (_error) {
+    return text('Access check failed', 500)
+  }
+
+  if (payload.action === 'checkAccess') {
+    return json({
+      ok: access.status === 'approved' || admin,
+      status: admin ? 'approved' : access.status,
+      isAdmin: admin,
+      email: user.email || access.email || '',
+    })
+  }
+
+  if (!admin) return text('Forbidden', 403)
+
   try {
     switch (payload.action) {
       case 'checkAdmin':
         return json({ok: true})
+
+      case 'listPendingUsers': {
+        const pendingRes = await serviceFetch(
+          'user_access?select=user_id,email,status,requested_at&status=eq.pending&order=requested_at.asc',
+          {headers: {'Prefer': ''}},
+        )
+        const pending = await readJson(pendingRes)
+        return json({users: Array.isArray(pending) ? pending : []}, pendingRes.status)
+      }
+
+      case 'approveUser': {
+        const userId = normalizeText(payload.userId, 'userId', 80)
+        const approveRes = await serviceFetch(`user_access?user_id=eq.${encodeURIComponent(userId)}`, {
+          method: 'PATCH',
+          headers: {'Prefer': 'return=representation'},
+          body: JSON.stringify({
+            status: 'approved',
+            approved_at: new Date().toISOString(),
+            approved_by: user.id,
+            updated_at: new Date().toISOString(),
+          }),
+        })
+        const approved = await readJson(approveRes)
+        return json({user: Array.isArray(approved) ? approved[0] : null, emailNotification: 'not_configured'}, approveRes.status)
+      }
 
       case 'createPrompt': {
         const prompt = sanitizePrompt(payload.prompt)
