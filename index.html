@@ -19,6 +19,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;line-height:1.6;}
+body.auth-locked .topbar, body.auth-locked .panel{display:none!important;}
 .topbar{background:linear-gradient(135deg,#0a0d14,#111520);border-bottom:1px solid var(--border);
   padding:0 28px;display:flex;align-items:center;gap:0;position:sticky;top:0;z-index:200;
   box-shadow:0 4px 30px rgba(0,0,0,.5);}
@@ -192,6 +193,15 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 .login-box input{margin-bottom:12px;text-align:center;}
 .login-box input[type=password]{letter-spacing:2px;}
 .login-error{color:var(--red);font-size:11px;font-family:var(--mono);margin-top:8px;min-height:16px;}
+.login-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px;}
+.login-tab{background:var(--surface2);border:1px solid var(--border2);color:var(--text-dim);border-radius:6px;
+  padding:7px 6px;font-family:var(--mono);font-size:10px;cursor:pointer;}
+.login-tab.active{color:#fff;border-color:var(--accent);background:rgba(79,142,247,.16);}
+.users-list{display:flex;flex-direction:column;gap:8px;}
+.user-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;background:var(--surface);
+  border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+.user-email{font-weight:600;color:var(--accent2);}
+.user-meta{font-family:var(--mono);font-size:10px;color:var(--text-dimmer);}
 /* toast */
 .toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--green);
   color:var(--green);font-family:var(--mono);font-size:12px;padding:10px 18px;border-radius:6px;
@@ -208,19 +218,27 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 }
 </style>
 </head>
-<body>
+<body class="auth-locked">
 
-<!-- LOGIN OVERLAY (edición) -->
-<div class="login-overlay hidden" id="loginOverlay">
+<!-- LOGIN OVERLAY -->
+<div class="login-overlay" id="loginOverlay">
   <div class="login-box">
     <div class="logo-mark" style="display:flex;align-items:center;justify-content:center;">P/</div>
-    <h2>Acceso a Edición</h2>
-    <p>ÁREA RESTRINGIDA</p>
-    <div class="fg">
-      <input type="text" id="loginEmail" placeholder="Email" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()" />
-      <input type="password" id="loginPwd" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
+    <h2>Promptylandia</h2>
+    <p id="loginModeLabel">ACCESO PRIVADO</p>
+    <div class="login-tabs">
+      <button class="login-tab active" id="loginModeBtn" onclick="setAuthMode('login')">Entrar</button>
+      <button class="login-tab" id="signupModeBtn" onclick="setAuthMode('signup')">Registro</button>
+      <button class="login-tab" id="recoverModeBtn" onclick="setAuthMode('recover')">Recuperar</button>
     </div>
-    <button class="btn btn-primary" style="width:100%;margin-top:4px;" onclick="doLogin()">Entrar</button>
+    <div class="fg" id="authEmailRow">
+      <input type="text" id="loginEmail" placeholder="Email" autocomplete="username" onkeydown="if(event.key==='Enter')submitAuthForm()" />
+    </div>
+    <div class="fg" id="authPasswordRow">
+      <input type="password" id="loginPwd" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitAuthForm()" />
+    </div>
+    <button class="btn btn-primary" id="authSubmitBtn" style="width:100%;margin-top:4px;" onclick="submitAuthForm()">Entrar</button>
+    <button class="btn btn-secondary" style="width:100%;margin-top:10px;" onclick="doGoogleLogin()">Continuar con Google</button>
     <div class="login-error" id="loginError"></div>
   </div>
 </div>
@@ -233,9 +251,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   </div>
   <div class="tab active" id="tab-search" onclick="switchTab('search')">&#x2315; Búsqueda</div>
   <div class="tab" id="tab-edit" onclick="requireAuth()">&#x270E; Editar base</div>
+  <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.7.2</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.8.0</div>
   </div>
 </div>
 
@@ -332,6 +351,23 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
       </table>
     </div>
     <div id="editPag" class="edit-pag"></div>
+  </div>
+</div>
+
+<!-- USERS PANEL -->
+<div class="panel" id="panel-users">
+  <div class="editor-wrap">
+    <div class="editor-topbar">
+      <div>
+        <h2>Usuarios pendientes</h2>
+        <div class="subtitle">Altas solicitadas por registro o Google Auth</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-secondary" onclick="loadPendingUsers()">Actualizar</button>
+    </div>
+    <div id="pendingUsersList" class="users-list">
+      <div class="empty"><span class="spinner"></span> Cargando…</div>
+    </div>
   </div>
 </div>
 
@@ -451,6 +487,9 @@ const EDIT_PAGE_SIZE = 100;
 
 let authenticated = false;
 let authSession = null;
+let authMode = 'login';
+let authState = {isAdmin:false,status:null,email:''};
+let appInitialized = false;
 let editCurrentPage = 1;
 let editTotalCount  = 0;
 let deleteId  = null;
@@ -481,7 +520,7 @@ function setLoading(id,on){
 }
 
 // ── SUPABASE API ──────────────────────────────────────────────────
-// All reads  → direct REST with anon key (RLS allows public SELECT)
+// All reads  → direct REST with the signed-in user's token (RLS requires approved users)
 // All writes → Edge Function proxy (service key never exposed in frontend)
 
 async function sbFetch(path, opts={}, useService=false){
@@ -493,12 +532,15 @@ async function sbFetch(path, opts={}, useService=false){
     return sbProxy(path, method, opts.body||null, opts.prefer||'');
   }
 
-  // Reads: always use anon key directly
-  const key = SUPABASE_ANON;
+  if(!authSession || !authSession.access_token){
+    clearAuth('Inicia sesión de nuevo.');
+    throw new Error('401: Unauthorized');
+  }
+  const key = authSession.access_token;
   const res = await fetch(SUPABASE_URL+'/rest/v1/'+path, {
     method: 'GET',
     headers:{
-      'apikey':        key,
+      'apikey':        SUPABASE_ANON,
       'Authorization': 'Bearer '+key,
       'Content-Type':  'application/json',
       'Prefer':        opts.prefer || (opts.headers&&opts.headers['Prefer']) || '',
@@ -514,13 +556,11 @@ async function sbFetch(path, opts={}, useService=false){
   return null;
 }
 
-// Edge Function proxy — service key lives only in Supabase Secrets
-async function sbProxy(path, method, body, prefer){
+async function callProxyAction(payload){
   if(!authSession || !authSession.access_token){
     clearAuth('Inicia sesión de nuevo.');
     throw new Error('401: Unauthorized');
   }
-  const payload = buildProxyPayload(path, method, body);
   const res = await fetch(SUPABASE_URL+'/functions/v1/prompts-proxy', {
     method: 'POST',
     headers:{
@@ -538,6 +578,11 @@ async function sbProxy(path, method, body, prefer){
   const txt = await res.text();
   if(!txt) return null;
   try{ return JSON.parse(txt); } catch(e){ return null; }
+}
+
+// Edge Function proxy — service key lives only in Supabase Secrets
+async function sbProxy(path, method, body, prefer){
+  return callProxyAction(buildProxyPayload(path, method, body));
 }
 
 function buildProxyPayload(path, method, body){
@@ -562,28 +607,27 @@ function buildProxyPayload(path, method, body){
 }
 
 async function verifyAdminAccess(){
+  if(authState.isAdmin) return true;
   if(!authSession || !authSession.access_token) return false;
-  const res = await fetch(SUPABASE_URL+'/functions/v1/prompts-proxy', {
-    method: 'POST',
-    headers:{
-      'Content-Type':    'application/json',
-      'apikey':          SUPABASE_ANON,
-      'Authorization':   'Bearer '+authSession.access_token
-    },
-    body: JSON.stringify({ action:'checkAdmin' })
-  });
-  if(res.ok) return true;
-  if(res.status===401 || res.status===403) clearAuth('Solo usuarios admin pueden editar.');
-  else toast('No se pudo verificar el acceso admin.', true);
+  try{
+    const data = await callProxyAction({action:'checkAccess'});
+    authState = data || authState;
+    if(data && data.isAdmin) return true;
+    toast('Solo usuarios admin pueden acceder a esta zona.', true);
+  } catch(e){
+    if(handleAuthError(e)) return false;
+    toast('No se pudo verificar el acceso admin.', true);
+  }
   return false;
 }
 
 // ── INIT ─────────────────────────────────────────────────────────
-(async function init(){
+async function initApp(){
+  if(appInitialized) return;
+  appInitialized = true;
   await loadMeta();
-  // load total count
   await refreshTotalCount();
-})();
+}
 
 // ── DYNAMIC METADATA ──────────────────────────────────────────────
 // Normalize unicode to NFC at the source so all comparisons work correctly
@@ -656,6 +700,16 @@ function populateSub(selId, cat){
 function onCatChange(){ populateSub('f-sub', document.getElementById('f-cat').value); }
 function onEditCatChange(){ populateSub('ef-sub', document.getElementById('ef-cat').value); loadEditPage(1); }
 
+function sessionWithExpiry(session){
+  if(!session) return null;
+  const expiresAt = session.expires_at || Math.floor(Date.now()/1000) + Number(session.expires_in || 3600);
+  return {...session, expires_at: expiresAt};
+}
+
+function authRedirectUrl(){
+  return window.location.href.split('#')[0];
+}
+
 function restoreAuthSession(){
   try{
     const raw = sessionStorage.getItem('promptylandiaAuthSession');
@@ -671,9 +725,117 @@ function restoreAuthSession(){
     sessionStorage.removeItem('promptylandiaAuthSession');
   }
 }
-restoreAuthSession();
+
+function parseAuthHash(){
+  if(!window.location.hash || window.location.hash.length < 2) return null;
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const accessToken = params.get('access_token');
+  if(!accessToken) return null;
+  const session = sessionWithExpiry({
+    access_token: accessToken,
+    refresh_token: params.get('refresh_token') || '',
+    token_type: params.get('token_type') || 'bearer',
+    expires_in: Number(params.get('expires_in') || 3600),
+    expires_at: params.get('expires_at') ? Number(params.get('expires_at')) : undefined,
+    auth_type: params.get('type') || ''
+  });
+  window.history.replaceState(null, document.title, authRedirectUrl());
+  return session;
+}
 
 // ── AUTH ─────────────────────────────────────────────────────────
+function setAuthMode(mode){
+  authMode = mode;
+  ['login','signup','recover'].forEach(m=>{
+    const btn=document.getElementById(m+'ModeBtn');
+    if(btn) btn.classList.toggle('active', m===mode);
+  });
+  const label=document.getElementById('loginModeLabel');
+  const submit=document.getElementById('authSubmitBtn');
+  const pwdRow=document.getElementById('authPasswordRow');
+  const emailRow=document.getElementById('authEmailRow');
+  const googleBtn=document.querySelector('.login-box .btn-secondary');
+  const pwd=document.getElementById('loginPwd');
+  emailRow.style.display = mode==='reset' ? 'none' : '';
+  pwdRow.style.display = mode==='recover' ? 'none' : '';
+  googleBtn.style.display = (mode==='login' || mode==='signup') ? '' : 'none';
+  if(mode==='login'){
+    label.textContent='ACCESO PRIVADO';
+    submit.textContent='Entrar';
+    pwd.autocomplete='current-password';
+  } else if(mode==='signup'){
+    label.textContent='SOLICITAR ALTA';
+    submit.textContent='Registrarme';
+    pwd.autocomplete='new-password';
+  } else if(mode==='recover'){
+    label.textContent='RECUPERAR CONTRASEÑA';
+    submit.textContent='Enviar enlace';
+  } else {
+    label.textContent='NUEVA CONTRASEÑA';
+    submit.textContent='Guardar contraseña';
+    pwdRow.style.display='';
+    pwd.autocomplete='new-password';
+  }
+  document.getElementById('loginError').textContent='';
+}
+
+async function submitAuthForm(){
+  if(authMode==='signup') return doSignup();
+  if(authMode==='recover') return doRecover();
+  if(authMode==='reset') return doResetPassword();
+  return doLogin();
+}
+
+function showLogin(message){
+  document.body.classList.add('auth-locked');
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('loginError').textContent=message||'';
+  setTimeout(()=>document.getElementById(authMode==='reset'?'loginPwd':'loginEmail').focus(),100);
+}
+
+async function completeAuth(session){
+  authSession = sessionWithExpiry(session);
+  sessionStorage.setItem('promptylandiaAuthSession', JSON.stringify(authSession));
+  authenticated = true;
+  const access = await callProxyAction({action:'checkAccess'});
+  authState = access || authState;
+  if(!access || !access.ok){
+    const pending = access && access.status === 'pending';
+    showLogin(pending ? 'Tu usuario está pendiente de aprobación por un administrador.' : 'Tu usuario no tiene acceso activo.');
+    return false;
+  }
+  document.body.classList.remove('auth-locked');
+  document.getElementById('loginOverlay').classList.add('hidden');
+  document.getElementById('loginPwd').value='';
+  document.getElementById('loginError').textContent='';
+  await initApp();
+  switchTab('search');
+  return true;
+}
+
+async function bootAuth(){
+  const hashSession = parseAuthHash();
+  if(hashSession && hashSession.auth_type === 'recovery'){
+    authSession = hashSession;
+    sessionStorage.setItem('promptylandiaAuthSession', JSON.stringify(authSession));
+    authenticated = true;
+    setAuthMode('reset');
+    showLogin('Introduce tu nueva contraseña.');
+    return;
+  }
+  if(hashSession){
+    try{ await completeAuth(hashSession); return; }
+    catch(e){ clearAuth('No se pudo completar el acceso.'); return; }
+  }
+  restoreAuthSession();
+  if(authSession){
+    try{ await completeAuth(authSession); return; }
+    catch(e){ clearAuth('Inicia sesión de nuevo.'); return; }
+  }
+  setAuthMode('login');
+  showLogin('');
+}
+
 async function requireAuth(){
   if(authenticated){
     if(await verifyAdminAccess()) switchTab('edit');
@@ -682,6 +844,15 @@ async function requireAuth(){
   document.getElementById('loginOverlay').classList.remove('hidden');
   setTimeout(()=>document.getElementById('loginEmail').focus(),100);
 }
+
+async function requireUsersAdmin(){
+  if(authenticated){
+    if(await verifyAdminAccess()) switchTab('users');
+    return;
+  }
+  showLogin('Inicia sesión como administrador.');
+}
+
 async function doLogin(){
   const email = document.getElementById('loginEmail').value.trim();
   const pwd = document.getElementById('loginPwd').value;
@@ -704,18 +875,7 @@ async function doLogin(){
       const txt = await res.text();
       throw new Error(res.status+': '+txt);
     }
-    authSession = await res.json();
-    sessionStorage.setItem('promptylandiaAuthSession', JSON.stringify(authSession));
-    authenticated=true;
-    if(!await verifyAdminAccess()){
-      err.textContent='Solo usuarios admin pueden editar.';
-      document.getElementById('loginPwd').value='';
-      return;
-    }
-    document.getElementById('loginOverlay').classList.add('hidden');
-    document.getElementById('loginPwd').value='';
-    err.textContent='';
-    switchTab('edit');
+    await completeAuth(await res.json());
   } catch(e){
     authSession=null;
     sessionStorage.removeItem('promptylandiaAuthSession');
@@ -724,10 +884,90 @@ async function doLogin(){
     document.getElementById('loginPwd').value='';
   }
 }
+
+async function doSignup(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const pwd = document.getElementById('loginPwd').value;
+  const err = document.getElementById('loginError');
+  if(!email || !pwd){
+    err.textContent='Introduce email y contraseña.';
+    return;
+  }
+  err.textContent='Registrando...';
+  try{
+    const res = await fetch(SUPABASE_URL+'/auth/v1/signup', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
+      body:JSON.stringify({email,password:pwd})
+    });
+    if(!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    document.getElementById('loginPwd').value='';
+    if(data.access_token) await completeAuth(data);
+    err.textContent='Solicitud recibida. Un administrador debe aprobar el acceso.';
+  } catch(e){
+    err.textContent='No se pudo registrar el usuario.';
+  }
+}
+
+async function doRecover(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const err = document.getElementById('loginError');
+  if(!email){
+    err.textContent='Introduce tu email.';
+    return;
+  }
+  err.textContent='Enviando...';
+  try{
+    const res = await fetch(SUPABASE_URL+'/auth/v1/recover?redirect_to='+encodeURIComponent(authRedirectUrl()), {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
+      body:JSON.stringify({email})
+    });
+    if(!res.ok) throw new Error(await res.text());
+    err.textContent='Revisa tu correo para cambiar la contraseña.';
+  } catch(e){
+    err.textContent='No se pudo enviar el enlace.';
+  }
+}
+
+async function doResetPassword(){
+  const pwd = document.getElementById('loginPwd').value;
+  const err = document.getElementById('loginError');
+  if(!pwd || pwd.length < 6){
+    err.textContent='La contraseña debe tener al menos 6 caracteres.';
+    return;
+  }
+  err.textContent='Guardando...';
+  try{
+    const res = await fetch(SUPABASE_URL+'/auth/v1/user', {
+      method:'PUT',
+      headers:{
+        'Content-Type':'application/json',
+        'apikey':SUPABASE_ANON,
+        'Authorization':'Bearer '+authSession.access_token
+      },
+      body:JSON.stringify({password:pwd})
+    });
+    if(!res.ok) throw new Error(await res.text());
+    err.textContent='Contraseña actualizada. Ya puedes entrar.';
+    clearAuth('Contraseña actualizada. Inicia sesión.');
+    setAuthMode('login');
+  } catch(e){
+    err.textContent='No se pudo actualizar la contraseña.';
+  }
+}
+
+function doGoogleLogin(){
+  window.location.href = SUPABASE_URL+'/auth/v1/authorize?provider=google&redirect_to='+encodeURIComponent(authRedirectUrl());
+}
+
 function clearAuth(message){
   authenticated=false;
   authSession=null;
+  authState={isAdmin:false,status:null,email:''};
   sessionStorage.removeItem('promptylandiaAuthSession');
+  document.body.classList.add('auth-locked');
   document.getElementById('loginPwd').value='';
   document.getElementById('loginError').textContent=message||'Sesión no autorizada.';
   document.getElementById('loginOverlay').classList.remove('hidden');
@@ -746,11 +986,53 @@ function handleAuthError(e, targetEl){
 
 // ── TABS ─────────────────────────────────────────────────────────
 function switchTab(tab){
-  ['search','edit'].forEach(t=>{
+  ['search','edit','users'].forEach(t=>{
     document.getElementById('panel-'+t).classList.toggle('active',t===tab);
     document.getElementById('tab-'+t).classList.toggle('active',t===tab);
   });
   if(tab==='edit') loadEditPage(1);
+  if(tab==='users') loadPendingUsers();
+}
+
+bootAuth();
+
+// ── USERS ADMIN ──────────────────────────────────────────────────
+async function loadPendingUsers(){
+  const list=document.getElementById('pendingUsersList');
+  list.innerHTML='<div class="empty"><span class="spinner"></span> Cargando…</div>';
+  try{
+    const data = await callProxyAction({action:'listPendingUsers'});
+    const users = (data && data.users) || [];
+    if(!users.length){
+      list.innerHTML='<div class="empty"><div class="icon">&#x2713;</div><h3>No hay usuarios pendientes</h3><p>Las nuevas solicitudes aparecerán aquí.</p></div>';
+      return;
+    }
+    list.innerHTML = users.map(u=>{
+      const when = u.requested_at ? new Date(u.requested_at).toLocaleString('es-ES') : '';
+      return '<div class="user-row">'+
+        '<div><div class="user-email">'+esc(u.email||'(sin email)')+'</div><div class="user-meta">Solicitado: '+esc(when)+'</div></div>'+
+        '<span class="tag ti">PENDIENTE</span>'+
+        '<button class="btn btn-primary" onclick="approvePendingUser(\''+esc(u.user_id)+'\')">Aprobar</button>'+
+      '</div>';
+    }).join('');
+  } catch(e){
+    if(handleAuthError(e, list)) return;
+    list.innerHTML='<div class="empty"><div class="icon">&#x26A0;</div><h3>Error</h3><p>'+esc(e.message)+'</p></div>';
+  }
+}
+
+async function approvePendingUser(userId){
+  try{
+    const data = await callProxyAction({action:'approveUser', userId});
+    const note = data && data.emailNotification === 'not_configured'
+      ? ' Usuario aprobado. El correo de aviso requiere configurar proveedor de email.'
+      : ' Usuario aprobado y notificado.';
+    toast(note, false);
+    await loadPendingUsers();
+  } catch(e){
+    if(handleAuthError(e)) return;
+    toast('No se pudo aprobar el usuario.', true);
+  }
 }
 
 // ── SEARCH ───────────────────────────────────────────────────────
@@ -903,7 +1185,7 @@ async function runSearch(){
       // Dropdowns-only search: no ranking needed, use server pagination
       q+='&order=nombre.asc';
       const countRes = await fetch(SUPABASE_URL+'/rest/v1/'+q, {
-        headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'count=exact','Range':'0-0'}
+        headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+authSession.access_token,'Prefer':'count=exact','Range':'0-0'}
       });
       searchTotal = parseInt(countRes.headers.get('content-range')?.split('/')[1]||'0');
       const start=(searchPage-1)*PAGE_SIZE, end=start+PAGE_SIZE-1;
@@ -1004,7 +1286,10 @@ function clearSearch(){
   document.getElementById('rh').style.display='none';
   document.getElementById('pag').style.display='none';
 }
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('panel-search').classList.contains('active'))doSearch();});
+document.addEventListener('keydown',e=>{
+  if(document.body.classList.contains('auth-locked')) return;
+  if(e.key==='Enter'&&document.getElementById('panel-search').classList.contains('active')) doSearch();
+});
 
 // ── EDIT TABLE ────────────────────────────────────────────────────
 async function loadEditPage(page){
@@ -1024,7 +1309,7 @@ async function loadEditPage(page){
     if(fq) q+='&nombre=ilike.'+encodeURIComponent('%'+fq+'%');
     q+='&order=id.asc';
     const countRes=await fetch(SUPABASE_URL+'/rest/v1/'+q,{
-      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'count=exact','Range':'0-0'}
+      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+authSession.access_token,'Prefer':'count=exact','Range':'0-0'}
     });
     editTotalCount=parseInt(countRes.headers.get('content-range')?.split('/')[1]||'0');
     document.getElementById('editSubtitle').textContent=editTotalCount.toLocaleString('es-ES')+' entradas';
