@@ -713,6 +713,14 @@ function authRedirectUrl(){
   return window.location.href.split('#')[0];
 }
 
+function authEndpoint(path, params={}){
+  const url = new URL(SUPABASE_URL+'/auth/v1/'+path);
+  Object.entries(params).forEach(([key,value])=>{
+    if(value) url.searchParams.set(key, value);
+  });
+  return url.toString();
+}
+
 async function readAuthError(res, fallback){
   let data = null;
   try{ data = await res.json(); } catch(e){}
@@ -888,7 +896,7 @@ async function doLogin(){
   }
   err.textContent='Entrando...';
   try{
-    const res = await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password', {
+    const res = await fetch(authEndpoint('token', {grant_type:'password'}), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -917,7 +925,7 @@ async function doSignup(){
   }
   err.textContent='Registrando...';
   try{
-    const res = await fetch(SUPABASE_URL+'/auth/v1/signup?redirect_to='+encodeURIComponent(authRedirectUrl()), {
+    const res = await fetch(authEndpoint('signup', {redirect_to:authRedirectUrl()}), {
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
       body:JSON.stringify({
@@ -945,7 +953,7 @@ async function resendConfirmation(){
   }
   err.textContent='Enviando confirmación...';
   try{
-    const res = await fetch(SUPABASE_URL+'/auth/v1/resend', {
+    const res = await fetch(authEndpoint('resend'), {
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
       body:JSON.stringify({
@@ -970,15 +978,18 @@ async function doRecover(){
   }
   err.textContent='Enviando...';
   try{
-    const res = await fetch(SUPABASE_URL+'/auth/v1/recover?redirect_to='+encodeURIComponent(authRedirectUrl()), {
+    const res = await fetch(authEndpoint('recover', {redirect_to:authRedirectUrl()}), {
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
-      body:JSON.stringify({email})
+      body:JSON.stringify({
+        email,
+        options:{emailRedirectTo:authRedirectUrl(), redirectTo:authRedirectUrl(), email_redirect_to:authRedirectUrl()}
+      })
     });
-    if(!res.ok) throw new Error(await res.text());
+    if(!res.ok) throw new Error(await readAuthError(res, 'No se pudo enviar el enlace.'));
     err.textContent='Revisa tu correo para cambiar la contraseña.';
   } catch(e){
-    err.textContent='No se pudo enviar el enlace.';
+    err.textContent=e.message||'No se pudo enviar el enlace.';
   }
 }
 
@@ -991,7 +1002,7 @@ async function doResetPassword(){
   }
   err.textContent='Guardando...';
   try{
-    const res = await fetch(SUPABASE_URL+'/auth/v1/user', {
+    const res = await fetch(authEndpoint('user'), {
       method:'PUT',
       headers:{
         'Content-Type':'application/json',
