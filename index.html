@@ -238,7 +238,8 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
       <input type="password" id="loginPwd" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitAuthForm()" />
     </div>
     <button class="btn btn-primary" id="authSubmitBtn" style="width:100%;margin-top:4px;" onclick="submitAuthForm()">Entrar</button>
-    <button class="btn btn-secondary" style="width:100%;margin-top:10px;" onclick="doGoogleLogin()">Continuar con Google</button>
+    <button class="btn btn-secondary" id="googleAuthBtn" style="width:100%;margin-top:10px;" onclick="doGoogleLogin()">Continuar con Google</button>
+    <button class="btn btn-secondary" id="resendConfirmBtn" style="width:100%;margin-top:10px;" onclick="resendConfirmation()">Reenviar confirmación</button>
     <div class="login-error" id="loginError"></div>
   </div>
 </div>
@@ -254,7 +255,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.8.0</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.8.1</div>
   </div>
 </div>
 
@@ -477,6 +478,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
 const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
 const SUPABASE_ANON    = 'sb_publishable_oCZqQJa3rbE6jV-WgcUObg_CNt4JF_T';
+const PUBLIC_APP_URL   = 'https://ricardojosealvarez.github.io/Promptylandia/';
 // ─────────────────────────────────────────────────────────────────
 
 const CATS   = ["Aprendizaje y Educación", "Ciencia y Tecnología", "Creación de Imágenes", "Cultura y Ocio", "Desarrollo personal", "Empresas y Marketing", "Escritura Creativa", "Imágenes / Vídeo", "Meta-Prompt", "Personas y Roles", "Programación y Desarrollo", "Resúmenes y Análisis", "Traducción y Lingüística"];
@@ -707,7 +709,28 @@ function sessionWithExpiry(session){
 }
 
 function authRedirectUrl(){
+  if(window.location.protocol === 'file:') return PUBLIC_APP_URL;
   return window.location.href.split('#')[0];
+}
+
+async function readAuthError(res, fallback){
+  let data = null;
+  try{ data = await res.json(); } catch(e){}
+  const raw = String(data?.msg || data?.message || data?.error_description || data?.error || fallback || '');
+  const lower = raw.toLowerCase();
+  if(lower.includes('email') && (lower.includes('confirm') || lower.includes('verified'))){
+    return 'Confirma tu email antes de entrar. Puedes reenviar el correo de confirmación.';
+  }
+  if(lower.includes('invalid login') || lower.includes('invalid credentials')){
+    return 'Email o contraseña incorrectos.';
+  }
+  if(lower.includes('already') && lower.includes('registered')){
+    return 'Este email ya está registrado. Si no lo confirmaste, reenvía el correo de confirmación.';
+  }
+  if(lower.includes('rate limit') || lower.includes('too many')){
+    return 'Has pedido demasiados correos seguidos. Espera un minuto antes de intentarlo otra vez.';
+  }
+  return fallback || 'No se pudo completar la operación.';
 }
 
 function restoreAuthSession(){
@@ -754,11 +777,13 @@ function setAuthMode(mode){
   const submit=document.getElementById('authSubmitBtn');
   const pwdRow=document.getElementById('authPasswordRow');
   const emailRow=document.getElementById('authEmailRow');
-  const googleBtn=document.querySelector('.login-box .btn-secondary');
+  const googleBtn=document.getElementById('googleAuthBtn');
+  const resendBtn=document.getElementById('resendConfirmBtn');
   const pwd=document.getElementById('loginPwd');
   emailRow.style.display = mode==='reset' ? 'none' : '';
   pwdRow.style.display = mode==='recover' ? 'none' : '';
   googleBtn.style.display = (mode==='login' || mode==='signup') ? '' : 'none';
+  resendBtn.style.display = (mode==='login' || mode==='signup') ? '' : 'none';
   if(mode==='login'){
     label.textContent='ACCESO PRIVADO';
     submit.textContent='Entrar';
@@ -871,16 +896,13 @@ async function doLogin(){
       },
       body: JSON.stringify({ email, password: pwd })
     });
-    if(!res.ok){
-      const txt = await res.text();
-      throw new Error(res.status+': '+txt);
-    }
+    if(!res.ok) throw new Error(await readAuthError(res, 'No se pudo iniciar sesión.'));
     await completeAuth(await res.json());
   } catch(e){
     authSession=null;
     sessionStorage.removeItem('promptylandiaAuthSession');
     authenticated=false;
-    err.textContent='No se pudo iniciar sesión.';
+    err.textContent=e.message||'No se pudo iniciar sesión.';
     document.getElementById('loginPwd').value='';
   }
 }
@@ -895,18 +917,47 @@ async function doSignup(){
   }
   err.textContent='Registrando...';
   try{
-    const res = await fetch(SUPABASE_URL+'/auth/v1/signup', {
+    const res = await fetch(SUPABASE_URL+'/auth/v1/signup?redirect_to='+encodeURIComponent(authRedirectUrl()), {
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
-      body:JSON.stringify({email,password:pwd})
+      body:JSON.stringify({
+        email,
+        password:pwd,
+        options:{emailRedirectTo:authRedirectUrl(), redirectTo:authRedirectUrl()}
+      })
     });
-    if(!res.ok) throw new Error(await res.text());
+    if(!res.ok) throw new Error(await readAuthError(res, 'No se pudo registrar el usuario.'));
     const data = await res.json();
     document.getElementById('loginPwd').value='';
     if(data.access_token) await completeAuth(data);
-    err.textContent='Solicitud recibida. Un administrador debe aprobar el acceso.';
+    err.textContent='Solicitud recibida. Revisa tu correo y espera aprobación del administrador.';
   } catch(e){
-    err.textContent='No se pudo registrar el usuario.';
+    err.textContent=e.message||'No se pudo registrar el usuario.';
+  }
+}
+
+async function resendConfirmation(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const err = document.getElementById('loginError');
+  if(!email){
+    err.textContent='Introduce tu email para reenviar la confirmación.';
+    return;
+  }
+  err.textContent='Enviando confirmación...';
+  try{
+    const res = await fetch(SUPABASE_URL+'/auth/v1/resend', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
+      body:JSON.stringify({
+        type:'signup',
+        email,
+        options:{email_redirect_to:authRedirectUrl()}
+      })
+    });
+    if(!res.ok) throw new Error(await readAuthError(res, 'No se pudo reenviar la confirmación.'));
+    err.textContent='Correo de confirmación reenviado. Revisa tu bandeja de entrada.';
+  } catch(e){
+    err.textContent=e.message||'No se pudo reenviar la confirmación.';
   }
 }
 
