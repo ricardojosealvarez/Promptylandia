@@ -255,7 +255,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.8.4</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.8.5</div>
   </div>
 </div>
 
@@ -1422,7 +1422,12 @@ function askDeleteByIdx(i){
 // ── PAGINATION (shared) ───────────────────────────────────────────
 function renderPag(containerId, current, total, callbackName){
   const el=document.getElementById(containerId);
-  if(total<=1){el.innerHTML='';return;}
+  if(total<=1){
+    el.innerHTML='';
+    el.style.display='none';
+    return;
+  }
+  el.style.display='flex';
   let h='<button class="pb" onclick="'+callbackName+'('+(current-1)+')" '+(current===1?'disabled':'')+'>&lsaquo; Ant</button>';
   const range=[];
   for(let i=1;i<=total;i++){
