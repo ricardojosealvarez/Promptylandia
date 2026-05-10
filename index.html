@@ -255,7 +255,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.8.3</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.8.4</div>
   </div>
 </div>
 
@@ -1098,7 +1098,7 @@ async function approvePendingUser(userId){
 }
 
 // ── SEARCH ───────────────────────────────────────────────────────
-let searchPage=1, searchTotal=0, _sTokens={n:[],p:[]}, _sParams={};
+let searchPage=1, searchTotal=0, _sTokens={n:[],p:[]}, _sParams={}, _searchMode='server';
 
 const STOPWORDS = new Set([
   'el','la','los','las','un','una','unos','unas','de','del','al','a','ante','bajo',
@@ -1216,6 +1216,7 @@ async function runSearch(){
     if(fi) q+='&ia=eq.'+encodeURIComponent(fi);
 
     if(needsRanking){
+      _searchMode='client';
       // Fetch ALL candidates matching any token, let client rank
       // Build OR filter: nombre or prompt contains any meaningful token
       const nTerms = nT.all;
@@ -1244,6 +1245,7 @@ async function runSearch(){
 
       searchTotal = _rankedResults.length;
     } else {
+      _searchMode='server';
       // Dropdowns-only search: no ranking needed, use server pagination
       q+='&order=nombre.asc';
       const countRes = await fetch(SUPABASE_URL+'/rest/v1/'+q, {
@@ -1273,7 +1275,7 @@ function renderSearchResults(){
     document.getElementById('pag').style.display='none'; return;
   }
   const start=(searchPage-1)*PAGE_SIZE, end=Math.min(start+PAGE_SIZE, total);
-  const page = _rankedResults.slice(start, end);
+  const page = _searchMode==='client' ? _rankedResults.slice(start, end) : _rankedResults;
   const allT=[..._sTokens.n,..._sTokens.p];
   const topScore = _rankedResults[0]?.score || 0;
 
@@ -1312,7 +1314,7 @@ function togglePrompt(i){
 }
 
 async function copyPrompt(i){
-  const start=(searchPage-1)*PAGE_SIZE;
+  const start=_searchMode==='client' ? (searchPage-1)*PAGE_SIZE : 0;
   const rec=_rankedResults[start+i]?.rec;
   if(!rec) return;
   const btn=document.getElementById('cp-'+i);
@@ -1333,8 +1335,7 @@ async function goSearchPage(p){
   const tp=Math.ceil(searchTotal/PAGE_SIZE);
   if(p<1||p>tp) return;
   searchPage=p;
-  // If ranked results are cached, just re-render the page slice
-  if(_rankedResults.length) renderSearchResults();
+  if(_searchMode==='client') renderSearchResults();
   else await runSearch();
   document.querySelector('.topbar').scrollIntoView({behavior:'smooth'});
 }
