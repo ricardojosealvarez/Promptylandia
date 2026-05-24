@@ -88,6 +88,9 @@ textarea{resize:vertical;min-height:90px;font-size:12.5px;line-height:1.65;}
 .tc{background:#1a2440;color:#6a9af5;border:1px solid #263560;}
 .ts{background:#1a2830;color:#5abf8a;border:1px solid #1e3830;}
 .ti{background:#281a30;color:#c57bff;border:1px solid #3a1e4a;}
+.tp{background:#2e220d;color:var(--amber);border:1px solid #5a3c10;}
+.premium-badge{display:inline-block;padding:3px 8px;border-radius:4px;background:#2e220d;color:var(--amber);
+  border:1px solid #5a3c10;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
 mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;padding:0 1px;}
 .btn-ver{background:transparent;border:1px solid var(--border2);color:var(--text-dimmer);
   font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:4px;cursor:pointer;
@@ -148,6 +151,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 .edit-table td.td-sub{color:#5abf8a;font-size:11px;}
 .edit-table td.td-ia{color:#c57bff;font-size:11px;}
 .edit-table td.td-nombre{color:var(--accent2);font-weight:600;}
+.edit-table td.td-premium{font-size:11px;}
 .edit-table td.td-prompt{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .edit-table td.td-notas{color:#8ab870;font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .edit-table td.td-actions{white-space:nowrap;}
@@ -168,6 +172,9 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 .new-val-row button{background:var(--surface2);border:1px solid var(--border2);color:var(--text-dim);
   padding:6px 12px;border-radius:5px;font-size:11px;cursor:pointer;}
 .new-val-row button:hover{color:var(--accent2);border-color:var(--accent);}
+.premium-toggle{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border2);
+  border-radius:6px;padding:8px 12px;color:var(--text-dim);font-size:12px;cursor:pointer;}
+.premium-toggle input{width:auto;accent-color:var(--amber);}
 .confirm-modal{background:var(--surface);border:1px solid var(--red-border);border-radius:10px;padding:28px;
   width:min(440px,95vw);box-shadow:0 20px 60px rgba(0,0,0,.6);}
 .confirm-modal h3{font-size:15px;margin-bottom:12px;color:var(--red);}
@@ -255,7 +262,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.8.5</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.9.0</div>
   </div>
 </div>
 
@@ -346,7 +353,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
       <table class="edit-table">
         <thead><tr>
           <th>ID</th><th>Categoría</th><th>Subcategoría</th><th>IA</th>
-          <th>Nombre</th><th>Prompt</th><th>Notas</th><th>Acciones</th>
+          <th>Nombre</th><th>Premium</th><th>Prompt</th><th>Notas</th><th>Acciones</th>
         </tr></thead>
         <tbody id="editTbody"></tbody>
       </table>
@@ -413,6 +420,13 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
       <div class="fg">
         <span class="flabel">Nombre *</span>
         <input type="text" id="m-nombre" placeholder="Nombre del prompt" />
+      </div>
+      <div class="fg">
+        <span class="flabel">Premium</span>
+        <label class="premium-toggle">
+          <input type="checkbox" id="m-premium" />
+          Calidad excepcional
+        </label>
       </div>
       <div class="fg full">
         <span class="flabel">Prompt *</span>
@@ -514,6 +528,12 @@ function toast(msg,err){
   const el=document.getElementById('toast');
   el.textContent=msg; el.className='toast show'+(err?' err':'');
   clearTimeout(el._t); el._t=setTimeout(()=>el.className='toast',2800);
+}
+function parsePremium(value){
+  const normalized=String(value||'').trim().toUpperCase();
+  if(['SI','SÍ','YES','TRUE','1'].includes(normalized)) return true;
+  if(!normalized||['NO','FALSE','0'].includes(normalized)) return false;
+  throw new Error('PREMIUM debe ser SI o NO');
 }
 function setLoading(id,on){
   const el=document.getElementById(id);
@@ -1284,6 +1304,7 @@ function renderSearchResults(){
     const scoreBadge = score>0
       ? '<span style="font-family:var(--mono);font-size:9px;color:var(--text-dimmer);align-self:center;white-space:nowrap;opacity:.6">#'+score+'</span>'
       : '';
+    const premiumBadge = rec.premium ? '<span class="premium-badge">Premium</span>' : '';
     return '<div class="card">'+
       '<div class="card-main">'+
         '<div class="cell"><span class="clabel">Categoría</span><span class="tag tc">'+esc(rec.categoria)+'</span></div>'+
@@ -1292,6 +1313,7 @@ function renderSearchResults(){
         '<div class="cell"><span class="clabel">Nombre</span><span class="cval nm">'+hl(rec.nombre,_sTokens.n)+'</span></div>'+
         '<div class="cell"><span class="clabel">Prompt</span><span class="cval pr">'+hl(rec.prompt,allT)+'</span></div>'+
         '<button class="btn-ver" id="pb-'+i+'" onclick="togglePrompt('+i+')">&#x25BC; Ver</button>'+
+        premiumBadge+
         scoreBadge+
       '</div>'+
       '<div class="prompt-full" id="pf-'+i+'">'+
@@ -1359,7 +1381,7 @@ async function loadEditPage(page){
   editCurrentPage=page;
   setLoading('editTbody',false);
   document.getElementById('editTbody').innerHTML=
-    '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-dimmer)"><span class="spinner"></span> Cargando…</td></tr>';
+    '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-dimmer)"><span class="spinner"></span> Cargando…</td></tr>';
   const fc=document.getElementById('ef-cat').value,
         fs=document.getElementById('ef-sub').value,
         fi=document.getElementById('ef-ia').value,
@@ -1382,7 +1404,7 @@ async function loadEditPage(page){
     renderEditRows(rows||[], start);
     renderPag('editPag', page, Math.ceil(editTotalCount/EDIT_PAGE_SIZE), 'loadEditPage');
   } catch(e){
-    document.getElementById('editTbody').innerHTML='<tr><td colspan="8" style="color:var(--red);padding:16px;">Error: '+esc(e.message)+'</td></tr>';
+    document.getElementById('editTbody').innerHTML='<tr><td colspan="9" style="color:var(--red);padding:16px;">Error: '+esc(e.message)+'</td></tr>';
   }
 }
 
@@ -1392,7 +1414,7 @@ let _editRowCache = [];
 function renderEditRows(rows, offset=0){
   _editRowCache = rows;   // store for openModal/askDelete reference by index
   const tbody=document.getElementById('editTbody');
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-dimmer);">Sin resultados</td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-dimmer);">Sin resultados</td></tr>';return;}
   tbody.innerHTML=rows.map((r,i)=>{
     const pos=offset+i+1;
     const pp=r.prompt.length>80?r.prompt.slice(0,80)+'…':r.prompt;
@@ -1403,6 +1425,7 @@ function renderEditRows(rows, offset=0){
       '<td class="td-sub">'+esc(r.subcategoria)+'</td>'+
       '<td class="td-ia">'+esc(r.ia)+'</td>'+
       '<td class="td-nombre">'+esc(r.nombre)+'</td>'+
+      '<td class="td-premium">'+(r.premium?'<span class="premium-badge">SI</span>':'<span class="tag">NO</span>')+'</td>'+
       '<td class="td-prompt" title="'+esc(r.prompt)+'">'+esc(pp)+'</td>'+
       '<td class="td-notas" title="'+esc(r.notas||'')+'">'+esc(np)+'</td>'+
       '<td class="td-actions">'+
@@ -1518,9 +1541,10 @@ function openModal(rec){
     document.getElementById('new'+x+'Row').style.display='none';
     document.getElementById('new'+x+'Input').value='';
   });
-  const r = rec || {categoria:'',subcategoria:'',ia:'',nombre:'',prompt:'',notas:''};
+  const r = rec || {categoria:'',subcategoria:'',ia:'',nombre:'',prompt:'',notas:'',premium:false};
   buildModalDropdowns(r.categoria, r.subcategoria, r.ia);
   document.getElementById('m-nombre').value=r.nombre;
+  document.getElementById('m-premium').checked=!!r.premium;
   document.getElementById('m-prompt').value=r.prompt;
   document.getElementById('m-notas').value=r.notas||'';
   document.getElementById('modalOverlay').classList.add('open');
@@ -1533,12 +1557,13 @@ async function saveModal(){
         sub=document.getElementById('m-sub').value.trim(),
         ia=document.getElementById('m-ia').value.trim(),
         nombre=document.getElementById('m-nombre').value.trim(),
+        premium=document.getElementById('m-premium').checked,
         prompt=document.getElementById('m-prompt').value.trim(),
         notas=document.getElementById('m-notas').value.trim();
   const errEl=document.getElementById('modalError');
   if(!cat||!sub||!ia||!nombre||!prompt){errEl.textContent='⚠ Todos los campos marcados * son obligatorios.';return;}
   errEl.textContent='';
-  const body=JSON.stringify({categoria:cat,subcategoria:sub,ia,nombre,prompt,notas});
+  const body=JSON.stringify({categoria:cat,subcategoria:sub,ia,nombre,prompt,notas,premium});
   try{
     if(editingId){
       await sbFetch('prompts?id=eq.'+editingId,{method:'PATCH',body,prefer:'return=minimal'},true);
@@ -1689,13 +1714,19 @@ async function processImportBuffer(buffer,filename){
           nombre=String(row[upperMap['NOMBRE']]||'').trim(),
           prompt=String(row[upperMap['PROMPT']]||'').trim(),
           notas=upperMap['NOTAS']?String(row[upperMap['NOTAS']]||'').trim():'';
+    let premium=false;
+    try{
+      premium=upperMap['PREMIUM']?parsePremium(row[upperMap['PREMIUM']]):false;
+    } catch(e){
+      errors.push('Fila '+rowNum+': '+e.message);return;
+    }
     if(!cat||!sub||!ia||!nombre||!prompt){
       errors.push('Fila '+rowNum+': campos vacíos');return;
     }
     const key=nombre.toLowerCase()+'||'+cat.toLowerCase();
     if(existingKeys.has(key)){skipped.push('Fila '+rowNum+': "'+nombre+'" / '+cat);return;}
     existingKeys.add(key);
-    toInsert.push({categoria:cat,subcategoria:sub,ia,nombre,prompt,notas});
+    toInsert.push({categoria:cat,subcategoria:sub,ia,nombre,prompt,notas,premium});
   });
   // Insert in batches
   let added=0;

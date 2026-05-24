@@ -16,6 +16,7 @@ type PromptInput = {
   nombre: string
   prompt: string
   notas?: string
+  premium?: boolean
 }
 
 type AuthUser = {
@@ -50,12 +51,23 @@ const normalizeText = (value: unknown, field: string, max: number, required = tr
   return trimmed
 }
 
+const normalizePremium = (value: unknown) => {
+  if (value === undefined || value === null || value === '') return false
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    const normalized = value.trim().toUpperCase()
+    if (['SI', 'SÍ', 'YES', 'TRUE', '1'].includes(normalized)) return true
+    if (['NO', 'FALSE', '0'].includes(normalized)) return false
+  }
+  throw new Error('Invalid premium')
+}
+
 const sanitizePrompt = (value: unknown): PromptInput => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Invalid prompt payload')
   }
   const raw = value as Record<string, unknown>
-  const allowed = new Set(['categoria', 'subcategoria', 'ia', 'nombre', 'prompt', 'notas'])
+  const allowed = new Set(['categoria', 'subcategoria', 'ia', 'nombre', 'prompt', 'notas', 'premium'])
   for (const key of Object.keys(raw)) {
     if (!allowed.has(key)) throw new Error(`Unexpected field: ${key}`)
   }
@@ -66,6 +78,7 @@ const sanitizePrompt = (value: unknown): PromptInput => {
     nombre: normalizeText(raw.nombre, 'nombre', 300),
     prompt: normalizeText(raw.prompt, 'prompt', 50000),
     notas: normalizeText(raw.notas, 'notas', 10000, false),
+    premium: normalizePremium(raw.premium),
   }
 }
 
