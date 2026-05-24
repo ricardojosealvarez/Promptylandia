@@ -54,6 +54,10 @@ select option{background:#1c2030;}
 input::placeholder,textarea::placeholder{color:var(--text-dimmer);}
 textarea{resize:vertical;min-height:90px;font-size:12.5px;line-height:1.65;}
 .actions{display:flex;align-items:center;gap:10px;}
+.search-premium-toggle{display:inline-flex;align-items:center;gap:8px;background:#2e220d;color:var(--amber);
+  border:1px solid #5a3c10;border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:11px;
+  font-weight:600;letter-spacing:.3px;cursor:pointer;white-space:nowrap;}
+.search-premium-toggle input{width:auto;accent-color:var(--amber);}
 .btn{border:none;padding:9px 20px;border-radius:6px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s,box-shadow .2s;}
 .btn-primary{background:linear-gradient(135deg,var(--accent),#3a7be0);color:#fff;box-shadow:0 2px 12px rgba(79,142,247,.3);}
 .btn-primary:hover{opacity:.9;}
@@ -262,7 +266,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.9.0</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.9.1</div>
   </div>
 </div>
 
@@ -294,6 +298,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
       </div>
     </div>
     <div class="actions">
+      <label class="search-premium-toggle">
+        <input type="checkbox" id="f-premium" />
+        Solo Premium
+      </label>
       <button class="btn btn-primary" onclick="doSearch()">&#x2315; Buscar</button>
       <button class="btn btn-secondary" onclick="clearSearch()">&#x2715; Limpiar</button>
       <span class="error-msg" id="errorMsg">&#x26A0; Selecciona al menos un filtro.</span>
@@ -1205,9 +1213,10 @@ async function doSearch(){
         fs=document.getElementById('f-sub').value,
         fi=document.getElementById('f-ia').value,
         fn=document.getElementById('f-nombre').value.trim(),
-        fp=document.getElementById('f-prompt').value.trim();
+        fp=document.getElementById('f-prompt').value.trim(),
+        premium=document.getElementById('f-premium').checked;
   const err=document.getElementById('errorMsg');
-  if(!fc&&!fs&&!fi&&!fn&&!fp){ err.style.display='inline'; return; }
+  if(!fc&&!fs&&!fi&&!fn&&!fp&&!premium){ err.style.display='inline'; return; }
   err.style.display='none';
 
   const nT = fn ? tokenizeQuery(fn) : {phrase:'',all:[],meaningful:[]};
@@ -1216,7 +1225,7 @@ async function doSearch(){
     n: nT.meaningful.length ? nT.meaningful : nT.all,
     p: pT.meaningful.length ? pT.meaningful : pT.all
   };
-  _sParams={fc,fs,fi,fn,fp,nT,pT};
+  _sParams={fc,fs,fi,fn,fp,premium,nT,pT};
   searchPage=1;
   await runSearch();
 }
@@ -1225,7 +1234,7 @@ async function runSearch(){
   setLoading('results',true);
   document.getElementById('rh').style.display='none';
   document.getElementById('pag').style.display='none';
-  const {fc,fs,fi,fn,fp,nT,pT}=_sParams;
+  const {fc,fs,fi,fn,fp,premium,nT,pT}=_sParams;
   const needsRanking = (fn||fp) ? true : false;
 
   try{
@@ -1234,6 +1243,7 @@ async function runSearch(){
     if(fc) q+='&categoria=eq.'+encodeURIComponent(fc);
     if(fs) q+='&subcategoria=eq.'+encodeURIComponent(fs);
     if(fi) q+='&ia=eq.'+encodeURIComponent(fi);
+    if(premium) q+='&premium=eq.true';
 
     if(needsRanking){
       _searchMode='client';
@@ -1364,6 +1374,7 @@ async function goSearchPage(p){
 
 function clearSearch(){
   ['f-cat','f-sub','f-ia','f-nombre','f-prompt'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-premium').checked=false;
   document.getElementById('errorMsg').style.display='none';
   populateSub('f-sub','');  // repopulate with all subcats, value already reset above
   searchTotal=0; searchPage=1; _rankedResults=[];
