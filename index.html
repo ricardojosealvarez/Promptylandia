@@ -53,11 +53,15 @@ select:focus,input:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 select option{background:#1c2030;}
 input::placeholder,textarea::placeholder{color:var(--text-dimmer);}
 textarea{resize:vertical;min-height:90px;font-size:12.5px;line-height:1.65;}
-.actions{display:flex;align-items:center;gap:10px;}
-.search-premium-toggle{display:inline-flex;align-items:center;gap:8px;background:#2e220d;color:var(--amber);
-  border:1px solid #5a3c10;border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:11px;
-  font-weight:600;letter-spacing:.3px;cursor:pointer;white-space:nowrap;}
-.search-premium-toggle input{width:auto;accent-color:var(--amber);}
+.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.search-filter-toggle{display:inline-flex;align-items:center;gap:8px;border-radius:6px;padding:8px 12px;
+  font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.3px;cursor:pointer;white-space:nowrap;}
+.search-filter-toggle input{width:auto;}
+.search-premium-toggle{background:#2e220d;color:var(--amber);border:1px solid #5a3c10;}
+.search-premium-toggle input{accent-color:var(--amber);}
+.search-new-toggle{background:#10271d;color:var(--green);border:1px solid #1e5038;}
+.search-new-toggle input{accent-color:var(--green);}
+.new-count{font-family:var(--mono);font-size:10px;color:var(--green);white-space:nowrap;}
 .btn{border:none;padding:9px 20px;border-radius:6px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s,box-shadow .2s;}
 .btn-primary{background:linear-gradient(135deg,var(--accent),#3a7be0);color:#fff;box-shadow:0 2px 12px rgba(79,142,247,.3);}
 .btn-primary:hover{opacity:.9;}
@@ -82,7 +86,8 @@ textarea{resize:vertical;min-height:90px;font-size:12.5px;line-height:1.65;}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;
   margin-bottom:7px;transition:border-color .15s,background .15s;}
 .card:hover{border-color:var(--border2);background:var(--surface2);}
-.card-main{display:grid;grid-template-columns:auto auto auto 1fr 2.2fr auto;gap:0 12px;align-items:start;}
+.card.new-card{border-color:#1e5038;box-shadow:inset 3px 0 0 var(--green);}
+.card-main{display:grid;grid-template-columns:auto auto auto 1fr 2.2fr auto auto;gap:0 12px;align-items:start;}
 .cell{display:flex;flex-direction:column;gap:2px;min-width:0;}
 .clabel{font-size:9px;font-family:var(--mono);color:var(--text-dimmer);text-transform:uppercase;letter-spacing:.7px;white-space:nowrap;}
 .cval{font-size:12px;color:var(--text);word-break:break-word;}
@@ -95,6 +100,9 @@ textarea{resize:vertical;min-height:90px;font-size:12.5px;line-height:1.65;}
 .tp{background:#2e220d;color:var(--amber);border:1px solid #5a3c10;}
 .premium-badge{display:inline-block;padding:3px 8px;border-radius:4px;background:#2e220d;color:var(--amber);
   border:1px solid #5a3c10;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
+.new-badge{display:inline-block;padding:3px 8px;border-radius:4px;background:#10271d;color:var(--green);
+  border:1px solid #1e5038;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
+.card-badges{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;align-self:center;}
 mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;padding:0 1px;}
 .btn-ver{background:transparent;border:1px solid var(--border2);color:var(--text-dimmer);
   font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:4px;cursor:pointer;
@@ -266,7 +274,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.9.1</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.10.0</div>
   </div>
 </div>
 
@@ -298,12 +306,17 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
       </div>
     </div>
     <div class="actions">
-      <label class="search-premium-toggle">
+      <label class="search-filter-toggle search-premium-toggle">
         <input type="checkbox" id="f-premium" />
         Solo Premium
       </label>
+      <label class="search-filter-toggle search-new-toggle">
+        <input type="checkbox" id="f-new" />
+        Solo novedades
+      </label>
       <button class="btn btn-primary" onclick="doSearch()">&#x2315; Buscar</button>
       <button class="btn btn-secondary" onclick="clearSearch()">&#x2715; Limpiar</button>
+      <span class="new-count" id="newCount">Calculando novedades…</span>
       <span class="error-msg" id="errorMsg">&#x26A0; Selecciona al menos un filtro.</span>
     </div>
   </div>
@@ -508,6 +521,7 @@ const IAS    = ["CHATGPT", "CLAUDE", "GEMINI", "GROK", "NOTEBOOKLM", "Multiples"
 const SUBCATS= {"Aprendizaje y Educación": ["Desarrollo de producto", "Diseño e ingeniería de producto", "Docencia", "Escritura y edición", "Estudio", "Idiomas", "Investigación", "Presentaciones", "Resumen", "Vida universitaria"], "Ciencia y Tecnología": ["Análisis", "Análisis de datos", "Auditoría", "Desarrollo de software", "Diseño web", "Docencia", "Hojas de Cálculo", "Ingeniería de aseguramiento de la calidad", "Investigación", "Investigación de mercado", "Legal", "Redes Sociales", "Resumen", "Seguridad"], "Creación de Imágenes": ["Análisis", "Arquitectura", "Diseño gráfico", "Diseño web", "Email marketing", "Guión", "Marketing de producto", "Presentaciones", "Publicidad", "Redes Sociales", "YouTube / Vídeo"], "Cultura y Ocio": ["Análisis", "Autores", "Eventos", "Guión", "Idiomas", "Viajes"], "Desarrollo personal": ["Análisis", "Autores", "CRO", "Coaching", "Desarrollo de producto", "Diseño e ingeniería de producto", "Diseño web", "Docencia", "Empleo", "Empleo, Redes Sociales", "Estudio", "Finanzas", "Finanzas / Inversión", "Guión", "Idiomas", "Legal", "Periodismo", "Productividad / Hábitos", "Redes Sociales", "Relaciones", "Salud y bienestar", "Terapia", "Vida universitaria"], "Empresas y Marketing": ["Análisis", "Análisis de datos", "Atención al cliente", "Auditoría", "Autores", "Blogging", "CRO", "Cadena de suministro", "Coaching", "Contabilidad", "Copywriting", "Creación de contenido", "Desarrollo de apps móviles", "Desarrollo de producto", "Desarrollo de software", "Diseño e ingeniería de producto", "Diseño gráfico", "Diseño web", "Docencia", "Email marketing", "Empleo", "Emprendimiento", "Escritura y edición", "Estrategia creativa", "Estudio", "Eventos", "Finanzas", "Finanzas / Inversión", "Guión", "Hojas de Cálculo", "Investigación", "Investigación de mercado", "Legal", "Marketing de producto", "Novela", "Periodismo", "Presentaciones", "Productividad / Hábitos", "Publicidad", "Redes Sociales", "Relaciones públicas", "Resumen", "SEO", "SOPs", "Sistemas embebidos e IoT", "YouTube"], "Escritura Creativa": ["Análisis", "Autores", "Blogging", "Diseño web", "Escritura y edición", "Novela", "Periodismo"], "Imágenes / Vídeo": ["Desarrollo de apps móviles", "Diseño web", "Finanzas / Inversión", "Redes Sociales", "YouTube / Vídeo"], "Meta-Prompt": ["Análisis", "Copywriting", "Docencia", "Email marketing", "Empleo", "Investigación"], "Personas y Roles": ["Análisis", "Arquitectura", "Autores", "Blogging", "Ciberseguridad", "Coaching", "Creación de contenido", "Desarrollo de IA y ML", "Diseño e ingeniería de producto", "Diseño web", "Docencia", "Empleo", "Escritura y edición", "Estrategia creativa", "Estudio", "Finanzas / Inversión", "Guión", "Idiomas", "Investigación", "Legal", "Productividad / Hábitos", "Relaciones públicas", "SOPs", "Salud y bienestar", "Terapia", "Viajes", "Vida universitaria"], "Programación y Desarrollo": ["Análisis", "Análisis de datos", "Atención al cliente", "Auditoría", "Autores", "BBDD", "Ciberseguridad", "Ciencia de datos y aprendizaje automático", "Cloud Computing y DevOps", "Coaching", "Desarrollo de IA y ML", "Desarrollo de apps móviles", "Desarrollo de software", "Desarrollo web", "Diseño e ingeniería de producto", "Diseño web", "Docencia", "Email marketing", "Empleo", "Escritura y edición", "Estudio", "Finanzas", "Guión", "Idiomas", "Ingeniería de aseguramiento de la calidad", "Ingeniería de datos y bases de datos", "Ingeniería de hardware", "Ingeniería de sistemas", "Investigación", "Investigación de mercado", "Legal", "Novela", "Periodismo", "Presentaciones", "Productividad / Hábitos", "Programación", "Redes y seguridad", "Resumen", "Robótica y automatización", "SOPs", "Seguridad / Legal", "Sistemas embebidos e IoT"], "Resúmenes y Análisis": ["Análisis", "Análisis de datos", "Copywriting", "Diseño e ingeniería de producto", "Diseño web", "Email marketing", "Escritura y edición", "Finanzas / Inversión", "Ingeniería de aseguramiento de la calidad", "Investigación", "Investigación de mercado", "Legal", "Resumen", "Seguridad / Legal"], "Traducción y Lingüística": ["Escritura y edición", "Idiomas", "Seguridad / Legal"]};
 const PAGE_SIZE      = 50;
 const EDIT_PAGE_SIZE = 100;
+const NEW_PROMPT_DAYS = 14;
 
 let authenticated = false;
 let authSession = null;
@@ -657,6 +671,7 @@ async function initApp(){
   appInitialized = true;
   await loadMeta();
   await refreshTotalCount();
+  await refreshNewPromptCount();
 }
 
 // ── DYNAMIC METADATA ──────────────────────────────────────────────
@@ -707,6 +722,37 @@ async function refreshTotalCount(){
     const n = (res !== null && res !== undefined) ? parseInt(res) : NaN;
     document.getElementById('totalCount').textContent = isNaN(n) ? '?' : n.toLocaleString('es-ES');
   } catch(e){ document.getElementById('totalCount').textContent='?'; }
+}
+
+function getNewPromptCutoff(){
+  return new Date(Date.now()-(NEW_PROMPT_DAYS*24*60*60*1000)).toISOString();
+}
+
+function isNewPrompt(prompt){
+  if(!prompt||!prompt.created_at) return false;
+  const createdAt=new Date(prompt.created_at).getTime();
+  return Number.isFinite(createdAt)&&createdAt>=Date.now()-(NEW_PROMPT_DAYS*24*60*60*1000);
+}
+
+async function refreshNewPromptCount(){
+  const el=document.getElementById('newCount');
+  if(!el||!authSession||!authSession.access_token) return;
+  try{
+    const q='prompts?select=id&created_at=gte.'+encodeURIComponent(getNewPromptCutoff());
+    const res=await fetch(SUPABASE_URL+'/rest/v1/'+q,{
+      headers:{
+        'apikey':SUPABASE_ANON,
+        'Authorization':'Bearer '+authSession.access_token,
+        'Prefer':'count=exact',
+        'Range':'0-0'
+      }
+    });
+    if(!res.ok) throw new Error('Count failed');
+    const count=parseInt(res.headers.get('content-range')?.split('/')[1]||'0',10);
+    el.textContent=(Number.isFinite(count)?count.toLocaleString('es-ES'):'?')+' novedades en '+NEW_PROMPT_DAYS+' días';
+  } catch(e){
+    el.textContent='Novedades no disponibles';
+  }
 }
 
 function buildDropdowns(catId, iaId, withAll){
@@ -1214,9 +1260,10 @@ async function doSearch(){
         fi=document.getElementById('f-ia').value,
         fn=document.getElementById('f-nombre').value.trim(),
         fp=document.getElementById('f-prompt').value.trim(),
-        premium=document.getElementById('f-premium').checked;
+        premium=document.getElementById('f-premium').checked,
+        recent=document.getElementById('f-new').checked;
   const err=document.getElementById('errorMsg');
-  if(!fc&&!fs&&!fi&&!fn&&!fp&&!premium){ err.style.display='inline'; return; }
+  if(!fc&&!fs&&!fi&&!fn&&!fp&&!premium&&!recent){ err.style.display='inline'; return; }
   err.style.display='none';
 
   const nT = fn ? tokenizeQuery(fn) : {phrase:'',all:[],meaningful:[]};
@@ -1225,7 +1272,7 @@ async function doSearch(){
     n: nT.meaningful.length ? nT.meaningful : nT.all,
     p: pT.meaningful.length ? pT.meaningful : pT.all
   };
-  _sParams={fc,fs,fi,fn,fp,premium,nT,pT};
+  _sParams={fc,fs,fi,fn,fp,premium,recent,recentCutoff:recent?getNewPromptCutoff():'',nT,pT};
   searchPage=1;
   await runSearch();
 }
@@ -1234,7 +1281,7 @@ async function runSearch(){
   setLoading('results',true);
   document.getElementById('rh').style.display='none';
   document.getElementById('pag').style.display='none';
-  const {fc,fs,fi,fn,fp,premium,nT,pT}=_sParams;
+  const {fc,fs,fi,fn,fp,premium,recent,recentCutoff,nT,pT}=_sParams;
   const needsRanking = (fn||fp) ? true : false;
 
   try{
@@ -1244,6 +1291,7 @@ async function runSearch(){
     if(fs) q+='&subcategoria=eq.'+encodeURIComponent(fs);
     if(fi) q+='&ia=eq.'+encodeURIComponent(fi);
     if(premium) q+='&premium=eq.true';
+    if(recent) q+='&created_at=gte.'+encodeURIComponent(recentCutoff);
 
     if(needsRanking){
       _searchMode='client';
@@ -1315,7 +1363,9 @@ function renderSearchResults(){
       ? '<span style="font-family:var(--mono);font-size:9px;color:var(--text-dimmer);align-self:center;white-space:nowrap;opacity:.6">#'+score+'</span>'
       : '';
     const premiumBadge = rec.premium ? '<span class="premium-badge">Premium</span>' : '';
-    return '<div class="card">'+
+    const newPrompt=isNewPrompt(rec);
+    const newBadge = newPrompt ? '<span class="new-badge">Nuevo</span>' : '';
+    return '<div class="card'+(newPrompt?' new-card':'')+'">'+
       '<div class="card-main">'+
         '<div class="cell"><span class="clabel">Categoría</span><span class="tag tc">'+esc(rec.categoria)+'</span></div>'+
         '<div class="cell"><span class="clabel">Subcategoría</span><span class="tag ts">'+esc(rec.subcategoria)+'</span></div>'+
@@ -1323,8 +1373,7 @@ function renderSearchResults(){
         '<div class="cell"><span class="clabel">Nombre</span><span class="cval nm">'+hl(rec.nombre,_sTokens.n)+'</span></div>'+
         '<div class="cell"><span class="clabel">Prompt</span><span class="cval pr">'+hl(rec.prompt,allT)+'</span></div>'+
         '<button class="btn-ver" id="pb-'+i+'" onclick="togglePrompt('+i+')">&#x25BC; Ver</button>'+
-        premiumBadge+
-        scoreBadge+
+        '<div class="card-badges">'+newBadge+premiumBadge+scoreBadge+'</div>'+
       '</div>'+
       '<div class="prompt-full" id="pf-'+i+'">'+
         '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">'+
@@ -1375,6 +1424,7 @@ async function goSearchPage(p){
 function clearSearch(){
   ['f-cat','f-sub','f-ia','f-nombre','f-prompt'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-premium').checked=false;
+  document.getElementById('f-new').checked=false;
   document.getElementById('errorMsg').style.display='none';
   populateSub('f-sub','');  // repopulate with all subcats, value already reset above
   searchTotal=0; searchPage=1; _rankedResults=[];
@@ -1585,6 +1635,7 @@ async function saveModal(){
       // Update total count
       const c=parseInt(document.getElementById('totalCount').textContent.replace(/[^0-9]/g,''))||0;
       document.getElementById('totalCount').textContent=(c+1).toLocaleString('es-ES');
+      refreshNewPromptCount();
     }
     closeModal();
     loadEditPage(editCurrentPage);
@@ -1608,6 +1659,7 @@ async function confirmDelete(){
     closeConfirm();
     loadEditPage(editCurrentPage);
     refreshTotalCount();
+    refreshNewPromptCount();
   } catch(e){
     if(handleAuthError(e)) return;
     toast('Error: '+e.message,true); closeConfirm();
@@ -1675,6 +1727,7 @@ async function confirmRangeDelete(){
     document.getElementById('rd-to').value='';
     loadEditPage(1);
     refreshTotalCount();
+    refreshNewPromptCount();
   } catch(e){
     if(handleAuthError(e)) return;
     toast('Error: '+e.message,true); closeConfirmRange();
@@ -1756,6 +1809,7 @@ async function processImportBuffer(buffer,filename){
     const c=parseInt(document.getElementById('totalCount').textContent.replace(/[^0-9]/g,''))||0;
     document.getElementById('totalCount').textContent=(c+added).toLocaleString('es-ES');
     loadEditPage(1);
+    refreshNewPromptCount();
   }
   showImportResult(filename,rows.length,added,skipped,errors);
 }
