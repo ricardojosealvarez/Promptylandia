@@ -274,7 +274,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.10.0</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.10.1</div>
   </div>
 </div>
 
@@ -509,6 +509,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 
 <div class="toast" id="toast"></div>
 
+<script src="scripts/postgrest-search.js"></script>
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
 const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
@@ -1296,13 +1297,7 @@ async function runSearch(){
     if(needsRanking){
       _searchMode='client';
       // Fetch ALL candidates matching any token, let client rank
-      // Build OR filter: nombre or prompt contains any meaningful token
-      const nTerms = nT.all;
-      const pTerms = pT.all;
-      const orClauses = [];
-      nTerms.forEach(t => orClauses.push('nombre.ilike.'+encodeURIComponent('%'+t+'%')));
-      pTerms.forEach(t => orClauses.push('prompt.ilike.'+encodeURIComponent('%'+t+'%')));
-      if(orClauses.length) q+='&or=('+orClauses.join(',')+')';
+      q=PostgrestSearch.appendSearchOrFilter(q,nT.all,pT.all);
       q+='&order=id.asc';
 
       // Fetch all pages
