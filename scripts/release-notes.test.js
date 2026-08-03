@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {CURRENT_VERSION, RELEASE_NOTES, getReleaseNotes} = require('./release-notes.js');
+const {CURRENT_VERSION, RELEASE_NOTES, getReleaseNotes} = require('./release-notes-1.12.0.js');
 
 test('la versión actual coincide con la nota más reciente', () => {
   assert.equal(getReleaseNotes()[0].version, CURRENT_VERSION);
