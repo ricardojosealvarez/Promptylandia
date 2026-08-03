@@ -36,6 +36,9 @@ body.auth-locked .topbar, body.auth-locked .panel{display:none!important;}
 .record-count{font-family:var(--mono);font-size:11px;color:var(--text-dimmer);
   background:var(--surface2);padding:4px 10px;border-radius:20px;border:1px solid var(--border);}
 .record-count span{color:var(--accent);font-weight:600;}
+.version-button{background:transparent;border:1px solid transparent;border-radius:5px;color:var(--text-dimmer);
+  cursor:pointer;font-family:var(--mono);font-size:10px;letter-spacing:.5px;padding:4px 7px;transition:color .2s,border-color .2s;}
+.version-button:hover,.version-button:focus-visible{border-color:var(--border2);color:var(--accent2);outline:none;}
 .panel{display:none;}.panel.active{display:block;}
 /* search header */
 .search-header{background:linear-gradient(135deg,#0a0d14,#111520);border-bottom:1px solid var(--border);padding:18px 28px 16px;}
@@ -192,6 +195,25 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 .confirm-modal h3{font-size:15px;margin-bottom:12px;color:var(--red);}
 .confirm-modal p{font-size:13px;color:var(--text-dim);margin-bottom:20px;line-height:1.6;}
 .confirm-actions{display:flex;gap:10px;justify-content:flex-end;}
+.release-modal{padding:0;width:min(680px,95vw);}
+.release-header{align-items:flex-start;background:linear-gradient(135deg,#111827,#171b28);border-bottom:1px solid var(--border);
+  display:flex;gap:16px;padding:24px 26px 20px;position:sticky;top:0;z-index:1;}
+.release-heading{flex:1;}
+.release-heading h3{margin-bottom:3px;}
+.release-heading p{color:var(--text-dimmer);font-family:var(--mono);font-size:10px;letter-spacing:.4px;}
+.release-close{align-items:center;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text-dim);
+  cursor:pointer;display:flex;font-size:18px;height:32px;justify-content:center;line-height:1;width:32px;}
+.release-close:hover,.release-close:focus-visible{border-color:var(--accent);color:var(--text);outline:none;}
+.release-list{display:flex;flex-direction:column;padding:8px 26px 24px;}
+.release-entry{border-bottom:1px solid var(--border);display:grid;gap:4px 20px;grid-template-columns:110px 1fr;padding:18px 0;}
+.release-entry:last-child{border-bottom:0;}
+.release-meta{align-items:flex-start;display:flex;flex-direction:column;gap:5px;}
+.release-version{background:var(--accent-glow);border:1px solid rgba(79,142,247,.3);border-radius:5px;color:var(--accent2);
+  font-family:var(--mono);font-size:11px;font-weight:600;padding:3px 8px;}
+.release-entry:first-child .release-version{background:#10271d;border-color:#1e5038;color:var(--green);}
+.release-date{color:var(--text-dimmer);font-family:var(--mono);font-size:9px;white-space:nowrap;}
+.release-changes{color:var(--text-dim);font-size:12.5px;padding-left:18px;}
+.release-changes li+li{margin-top:5px;}
 /* import */
 .import-stats{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;}
 .istat{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:10px 16px;text-align:center;min-width:96px;}
@@ -233,6 +255,8 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   .filters,.filters2{grid-template-columns:1fr;}
   .search-header,.main,.editor-wrap{padding:14px;}
   .modal-grid{grid-template-columns:1fr;}
+  .release-entry{grid-template-columns:1fr;}
+  .release-meta{align-items:center;flex-direction:row;}
   .edit-filters{flex-direction:column;}
 }
 </style>
@@ -274,7 +298,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);opacity:.5;letter-spacing:.5px;">v1.10.1</div>
+    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.11.0</button>
   </div>
 </div>
 
@@ -466,6 +490,20 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   </div>
 </div>
 
+<!-- NOTAS DE VERSIONES -->
+<div class="modal-overlay" id="releaseNotesOverlay" onclick="handleReleaseOverlayClick(event)">
+  <section class="modal release-modal" role="dialog" aria-modal="true" aria-labelledby="releaseNotesTitle" tabindex="-1">
+    <div class="release-header">
+      <div class="release-heading">
+        <h3 id="releaseNotesTitle">Cambios y mejoras</h3>
+        <p>Historial de versiones · más recientes primero</p>
+      </div>
+      <button class="release-close" type="button" onclick="closeReleaseNotes()" aria-label="Cerrar notas de versiones">&times;</button>
+    </div>
+    <div class="release-list" id="releaseNotesList"></div>
+  </section>
+</div>
+
 <!-- CONFIRM DELETE -->
 <div class="modal-overlay" id="confirmOverlay">
   <div class="confirm-modal">
@@ -510,6 +548,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 <div class="toast" id="toast"></div>
 
 <script src="scripts/postgrest-search.js"></script>
+<script src="scripts/release-notes.js"></script>
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
 const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
@@ -534,6 +573,7 @@ let editTotalCount  = 0;
 let deleteId  = null;
 let editingId = null;
 let _rangeFrom = null, _rangeTo = null;
+let releaseNotesPreviousFocus = null;
 
 // ── HELPERS ───────────────────────────────────────────────────────
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -562,6 +602,43 @@ function setLoading(id,on){
   const el=document.getElementById(id);
   if(!el) return;
   if(on) el.innerHTML='<div class="empty"><span class="spinner"></span> Cargando…</div>';
+}
+
+// ── RELEASE NOTES ────────────────────────────────────────────────
+function renderReleaseNotes(){
+  const api=window.PromptylandiaReleaseNotes;
+  if(!api) return;
+  document.getElementById('versionButton').textContent='v'+api.CURRENT_VERSION;
+  document.getElementById('releaseNotesList').innerHTML=api.getReleaseNotes().map(release=>
+    '<article class="release-entry">'+
+      '<div class="release-meta">'+
+        '<span class="release-version">v'+esc(release.version)+'</span>'+
+        '<time class="release-date" datetime="'+esc(release.date)+'">'+formatReleaseDate(release.date)+'</time>'+
+      '</div>'+
+      '<ul class="release-changes">'+release.changes.map(change=>'<li>'+esc(change)+'</li>').join('')+'</ul>'+
+    '</article>'
+  ).join('');
+}
+
+function formatReleaseDate(date){
+  return new Intl.DateTimeFormat('es-ES',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(date+'T00:00:00Z'));
+}
+
+function openReleaseNotes(){
+  releaseNotesPreviousFocus=document.activeElement;
+  renderReleaseNotes();
+  const overlay=document.getElementById('releaseNotesOverlay');
+  overlay.classList.add('open');
+  overlay.querySelector('.release-close').focus();
+}
+
+function closeReleaseNotes(){
+  document.getElementById('releaseNotesOverlay').classList.remove('open');
+  if(releaseNotesPreviousFocus) releaseNotesPreviousFocus.focus();
+}
+
+function handleReleaseOverlayClick(event){
+  if(event.target===event.currentTarget) closeReleaseNotes();
 }
 
 // ── SUPABASE API ──────────────────────────────────────────────────
@@ -1428,6 +1505,10 @@ function clearSearch(){
   document.getElementById('pag').style.display='none';
 }
 document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&document.getElementById('releaseNotesOverlay').classList.contains('open')){
+    closeReleaseNotes();
+    return;
+  }
   if(document.body.classList.contains('auth-locked')) return;
   if(e.key==='Enter'&&document.getElementById('panel-search').classList.contains('active')) doSearch();
 });
