@@ -4,9 +4,10 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.PromptylandiaReleaseNotes = api;
 })(typeof window !== 'undefined' ? window : globalThis, () => {
-  const CURRENT_VERSION = '1.11.0';
+  const CURRENT_VERSION = '1.12.0';
   const RELEASE_NOTES = Object.freeze([
-    {version:'1.11.0', date:'2026-08-03', changes:['Nuevo historial de versiones con fecha de implantación y las mejoras más recientes en primer lugar.']},
+    {version:'1.12.0', date:'2026-08-03', changes:['Nuevo historial de versiones con fecha de implantación y las mejoras más recientes en primer lugar.']},
+    {version:'1.11.0', date:'2026-08-03', changes:['Añadidos los distintivos y el filtro para prompts actualizados recientemente.']},
     {version:'1.10.1', date:'2026-07-29', changes:['Corregida la búsqueda por nombre cuando el texto contiene caracteres especiales de PostgREST.']},
     {version:'1.10.0', date:'2026-06-12', changes:['Añadidos el filtro, el contador y los distintivos para prompts incorporados durante los últimos 14 días.']},
     {version:'1.9.1', date:'2026-05-24', changes:['Añadido el filtro para mostrar únicamente prompts Premium.']},

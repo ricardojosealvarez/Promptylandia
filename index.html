@@ -90,6 +90,7 @@ textarea{resize:vertical;min-height:90px;font-size:12.5px;line-height:1.65;}
   margin-bottom:7px;transition:border-color .15s,background .15s;}
 .card:hover{border-color:var(--border2);background:var(--surface2);}
 .card.new-card{border-color:#1e5038;box-shadow:inset 3px 0 0 var(--green);}
+.card.updated-card{border-color:var(--edit-border);box-shadow:inset 3px 0 0 var(--edit);}
 .card-main{display:grid;grid-template-columns:auto auto auto 1fr 2.2fr auto auto;gap:0 12px;align-items:start;}
 .cell{display:flex;flex-direction:column;gap:2px;min-width:0;}
 .clabel{font-size:9px;font-family:var(--mono);color:var(--text-dimmer);text-transform:uppercase;letter-spacing:.7px;white-space:nowrap;}
@@ -105,6 +106,8 @@ textarea{resize:vertical;min-height:90px;font-size:12.5px;line-height:1.65;}
   border:1px solid #5a3c10;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
 .new-badge{display:inline-block;padding:3px 8px;border-radius:4px;background:#10271d;color:var(--green);
   border:1px solid #1e5038;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
+.updated-badge{display:inline-block;padding:3px 8px;border-radius:4px;background:var(--edit-bg);color:var(--edit);
+  border:1px solid var(--edit-border);font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
 .card-badges{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;align-self:center;}
 mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;padding:0 1px;}
 .btn-ver{background:transparent;border:1px solid var(--border2);color:var(--text-dimmer);
@@ -298,7 +301,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.11.0</button>
+    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.12.0</button>
   </div>
 </div>
 
@@ -548,7 +551,8 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 <div class="toast" id="toast"></div>
 
 <script src="scripts/postgrest-search.js"></script>
-<script src="scripts/release-notes.js"></script>
+<script src="scripts/release-notes.js?v=1.12.0"></script>
+<script src="scripts/prompt-novelty.js"></script>
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
 const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
@@ -561,7 +565,7 @@ const IAS    = ["CHATGPT", "CLAUDE", "GEMINI", "GROK", "NOTEBOOKLM", "Multiples"
 const SUBCATS= {"Aprendizaje y Educación": ["Desarrollo de producto", "Diseño e ingeniería de producto", "Docencia", "Escritura y edición", "Estudio", "Idiomas", "Investigación", "Presentaciones", "Resumen", "Vida universitaria"], "Ciencia y Tecnología": ["Análisis", "Análisis de datos", "Auditoría", "Desarrollo de software", "Diseño web", "Docencia", "Hojas de Cálculo", "Ingeniería de aseguramiento de la calidad", "Investigación", "Investigación de mercado", "Legal", "Redes Sociales", "Resumen", "Seguridad"], "Creación de Imágenes": ["Análisis", "Arquitectura", "Diseño gráfico", "Diseño web", "Email marketing", "Guión", "Marketing de producto", "Presentaciones", "Publicidad", "Redes Sociales", "YouTube / Vídeo"], "Cultura y Ocio": ["Análisis", "Autores", "Eventos", "Guión", "Idiomas", "Viajes"], "Desarrollo personal": ["Análisis", "Autores", "CRO", "Coaching", "Desarrollo de producto", "Diseño e ingeniería de producto", "Diseño web", "Docencia", "Empleo", "Empleo, Redes Sociales", "Estudio", "Finanzas", "Finanzas / Inversión", "Guión", "Idiomas", "Legal", "Periodismo", "Productividad / Hábitos", "Redes Sociales", "Relaciones", "Salud y bienestar", "Terapia", "Vida universitaria"], "Empresas y Marketing": ["Análisis", "Análisis de datos", "Atención al cliente", "Auditoría", "Autores", "Blogging", "CRO", "Cadena de suministro", "Coaching", "Contabilidad", "Copywriting", "Creación de contenido", "Desarrollo de apps móviles", "Desarrollo de producto", "Desarrollo de software", "Diseño e ingeniería de producto", "Diseño gráfico", "Diseño web", "Docencia", "Email marketing", "Empleo", "Emprendimiento", "Escritura y edición", "Estrategia creativa", "Estudio", "Eventos", "Finanzas", "Finanzas / Inversión", "Guión", "Hojas de Cálculo", "Investigación", "Investigación de mercado", "Legal", "Marketing de producto", "Novela", "Periodismo", "Presentaciones", "Productividad / Hábitos", "Publicidad", "Redes Sociales", "Relaciones públicas", "Resumen", "SEO", "SOPs", "Sistemas embebidos e IoT", "YouTube"], "Escritura Creativa": ["Análisis", "Autores", "Blogging", "Diseño web", "Escritura y edición", "Novela", "Periodismo"], "Imágenes / Vídeo": ["Desarrollo de apps móviles", "Diseño web", "Finanzas / Inversión", "Redes Sociales", "YouTube / Vídeo"], "Meta-Prompt": ["Análisis", "Copywriting", "Docencia", "Email marketing", "Empleo", "Investigación"], "Personas y Roles": ["Análisis", "Arquitectura", "Autores", "Blogging", "Ciberseguridad", "Coaching", "Creación de contenido", "Desarrollo de IA y ML", "Diseño e ingeniería de producto", "Diseño web", "Docencia", "Empleo", "Escritura y edición", "Estrategia creativa", "Estudio", "Finanzas / Inversión", "Guión", "Idiomas", "Investigación", "Legal", "Productividad / Hábitos", "Relaciones públicas", "SOPs", "Salud y bienestar", "Terapia", "Viajes", "Vida universitaria"], "Programación y Desarrollo": ["Análisis", "Análisis de datos", "Atención al cliente", "Auditoría", "Autores", "BBDD", "Ciberseguridad", "Ciencia de datos y aprendizaje automático", "Cloud Computing y DevOps", "Coaching", "Desarrollo de IA y ML", "Desarrollo de apps móviles", "Desarrollo de software", "Desarrollo web", "Diseño e ingeniería de producto", "Diseño web", "Docencia", "Email marketing", "Empleo", "Escritura y edición", "Estudio", "Finanzas", "Guión", "Idiomas", "Ingeniería de aseguramiento de la calidad", "Ingeniería de datos y bases de datos", "Ingeniería de hardware", "Ingeniería de sistemas", "Investigación", "Investigación de mercado", "Legal", "Novela", "Periodismo", "Presentaciones", "Productividad / Hábitos", "Programación", "Redes y seguridad", "Resumen", "Robótica y automatización", "SOPs", "Seguridad / Legal", "Sistemas embebidos e IoT"], "Resúmenes y Análisis": ["Análisis", "Análisis de datos", "Copywriting", "Diseño e ingeniería de producto", "Diseño web", "Email marketing", "Escritura y edición", "Finanzas / Inversión", "Ingeniería de aseguramiento de la calidad", "Investigación", "Investigación de mercado", "Legal", "Resumen", "Seguridad / Legal"], "Traducción y Lingüística": ["Escritura y edición", "Idiomas", "Seguridad / Legal"]};
 const PAGE_SIZE      = 50;
 const EDIT_PAGE_SIZE = 100;
-const NEW_PROMPT_DAYS = 14;
+const NEW_PROMPT_DAYS = 15;
 
 let authenticated = false;
 let authSession = null;
@@ -803,20 +807,14 @@ async function refreshTotalCount(){
 }
 
 function getNewPromptCutoff(){
-  return new Date(Date.now()-(NEW_PROMPT_DAYS*24*60*60*1000)).toISOString();
-}
-
-function isNewPrompt(prompt){
-  if(!prompt||!prompt.created_at) return false;
-  const createdAt=new Date(prompt.created_at).getTime();
-  return Number.isFinite(createdAt)&&createdAt>=Date.now()-(NEW_PROMPT_DAYS*24*60*60*1000);
+  return PromptNovelty.getCutoff(NEW_PROMPT_DAYS);
 }
 
 async function refreshNewPromptCount(){
   const el=document.getElementById('newCount');
   if(!el||!authSession||!authSession.access_token) return;
   try{
-    const q='prompts?select=id&created_at=gte.'+encodeURIComponent(getNewPromptCutoff());
+    const q='prompts?select=id&updated_at=gte.'+encodeURIComponent(getNewPromptCutoff());
     const res=await fetch(SUPABASE_URL+'/rest/v1/'+q,{
       headers:{
         'apikey':SUPABASE_ANON,
@@ -1369,7 +1367,7 @@ async function runSearch(){
     if(fs) q+='&subcategoria=eq.'+encodeURIComponent(fs);
     if(fi) q+='&ia=eq.'+encodeURIComponent(fi);
     if(premium) q+='&premium=eq.true';
-    if(recent) q+='&created_at=gte.'+encodeURIComponent(recentCutoff);
+    if(recent) q+='&updated_at=gte.'+encodeURIComponent(recentCutoff);
 
     if(needsRanking){
       _searchMode='client';
@@ -1435,9 +1433,12 @@ function renderSearchResults(){
       ? '<span style="font-family:var(--mono);font-size:9px;color:var(--text-dimmer);align-self:center;white-space:nowrap;opacity:.6">#'+score+'</span>'
       : '';
     const premiumBadge = rec.premium ? '<span class="premium-badge">Premium</span>' : '';
-    const newPrompt=isNewPrompt(rec);
-    const newBadge = newPrompt ? '<span class="new-badge">Nuevo</span>' : '';
-    return '<div class="card'+(newPrompt?' new-card':'')+'">'+
+    const noveltyStatus=PromptNovelty.getStatus(rec,NEW_PROMPT_DAYS);
+    const noveltyBadge = noveltyStatus==='updated'
+      ? '<span class="updated-badge">Actualizado</span>'
+      : noveltyStatus==='new' ? '<span class="new-badge">Nuevo</span>' : '';
+    const noveltyClass = noveltyStatus==='updated' ? ' updated-card' : noveltyStatus==='new' ? ' new-card' : '';
+    return '<div class="card'+noveltyClass+'">'+
       '<div class="card-main">'+
         '<div class="cell"><span class="clabel">Categoría</span><span class="tag tc">'+esc(rec.categoria)+'</span></div>'+
         '<div class="cell"><span class="clabel">Subcategoría</span><span class="tag ts">'+esc(rec.subcategoria)+'</span></div>'+
@@ -1445,7 +1446,7 @@ function renderSearchResults(){
         '<div class="cell"><span class="clabel">Nombre</span><span class="cval nm">'+hl(rec.nombre,_sTokens.n)+'</span></div>'+
         '<div class="cell"><span class="clabel">Prompt</span><span class="cval pr">'+hl(rec.prompt,allT)+'</span></div>'+
         '<button class="btn-ver" id="pb-'+i+'" onclick="togglePrompt('+i+')">&#x25BC; Ver</button>'+
-        '<div class="card-badges">'+newBadge+premiumBadge+scoreBadge+'</div>'+
+        '<div class="card-badges">'+noveltyBadge+premiumBadge+scoreBadge+'</div>'+
       '</div>'+
       '<div class="prompt-full" id="pf-'+i+'">'+
         '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">'+
@@ -1705,6 +1706,7 @@ async function saveModal(){
     if(editingId){
       await sbFetch('prompts?id=eq.'+editingId,{method:'PATCH',body,prefer:'return=minimal'},true);
       toast('✓ Entrada actualizada.');
+      refreshNewPromptCount();
     } else {
       await sbFetch('prompts',{method:'POST',body,prefer:'return=minimal'},true);
       toast('✓ Entrada añadida.');

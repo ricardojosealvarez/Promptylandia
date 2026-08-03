@@ -9,7 +9,7 @@ test('la versión actual coincide con la nota más reciente', () => {
 test('las notas se ordenan de la versión más reciente a la más antigua', () => {
   const versions = getReleaseNotes().map(({version}) => version);
 
-  assert.deepEqual(versions.slice(0, 4), ['1.11.0', '1.10.1', '1.10.0', '1.9.1']);
+  assert.deepEqual(versions.slice(0, 4), ['1.12.0', '1.11.0', '1.10.1', '1.10.0']);
 });
 
 test('cada versión tiene fecha ISO y al menos una mejora', () => {
