@@ -78,6 +78,7 @@ textarea{resize:vertical;min-height:90px;font-size:12.5px;line-height:1.65;}
   border-radius:6px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;
   transition:background .2s;display:inline-flex;align-items:center;gap:7px;}
 .btn-import:hover{background:#0f2018;}
+.file-input{clip:rect(0 0 0 0);clip-path:inset(50%);height:1px;overflow:hidden;position:absolute;white-space:nowrap;width:1px;}
 .error-msg{color:var(--red);font-size:12px;font-family:var(--mono);display:none;}
 /* main */
 .main{padding:22px 28px;max-width:1600px;margin:0 auto;}
@@ -301,7 +302,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.12.0</button>
+    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.12.1</button>
   </div>
 </div>
 
@@ -366,10 +367,8 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
         <div class="subtitle" id="editSubtitle">…</div>
       </div>
       <div class="spacer"></div>
-      <label class="btn btn-import">
-        &#x1F4C2; Importar Excel
-        <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleImportFile(this)">
-      </label>
+      <button class="btn btn-import" type="button" onclick="document.querySelector('#importFileInput').click()">&#x1F4C2; Importar Excel</button>
+      <input class="file-input" type="file" id="importFileInput" accept=".xlsx,.xls" onchange="handleImportFile(this)">
       <button class="btn btn-primary" onclick="openModal(null)">&#x2B; Nueva entrada</button>
     </div>
 
@@ -551,7 +550,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 <div class="toast" id="toast"></div>
 
 <script src="scripts/postgrest-search.js"></script>
-<script src="scripts/release-notes-1.12.0.js"></script>
+<script src="scripts/release-notes-1.12.1.js"></script>
 <script src="scripts/prompt-novelty.js"></script>
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
