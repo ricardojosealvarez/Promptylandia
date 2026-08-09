@@ -313,7 +313,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.14.3</button>
+    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.15.0</button>
   </div>
 </div>
 
@@ -570,10 +570,11 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 <div class="toast" id="toast"></div>
 
 <script src="scripts/postgrest-search.js"></script>
-<script src="scripts/release-notes-1.14.3.js"></script>
+<script src="scripts/release-notes-1.15.0.js"></script>
 <script src="scripts/prompt-novelty.js"></script>
 <script src="scripts/import-actions.js"></script>
 <script src="scripts/featured-novelty.js?v=1.14.3"></script>
+<script src="scripts/auth-session.js"></script>
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
 const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
@@ -601,6 +602,7 @@ let _rangeFrom = null, _rangeTo = null;
 let releaseNotesPreviousFocus = null;
 let featuredPrompt = null;
 let featuredRequestId = 0;
+let authExpiryTimer = null;
 
 // ── HELPERS ───────────────────────────────────────────────────────
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -666,6 +668,17 @@ function handleReleaseOverlayClick(event){
 // All reads  → direct REST with the signed-in user's token (RLS requires approved users)
 // All writes → Edge Function proxy (service key never exposed in frontend)
 
+async function authenticatedFetch(url, options={}){
+  if(!ensureActiveSession()) throw new Error('401: Sesión expirada');
+  const requestToken=authSession.access_token;
+  const response=await fetch(url,options);
+  if(response.status===401&&authSession?.access_token===requestToken){
+    expireAuthSession();
+  }
+  if(response.status===401) throw new Error('401: Sesión expirada');
+  return response;
+}
+
 async function sbFetch(path, opts={}, useService=false){
   const method = opts.method || 'GET';
   const isWrite = method==='POST' || method==='PATCH' || method==='DELETE';
@@ -675,12 +688,9 @@ async function sbFetch(path, opts={}, useService=false){
     return sbProxy(path, method, opts.body||null, opts.prefer||'');
   }
 
-  if(!authSession || !authSession.access_token){
-    clearAuth('Inicia sesión de nuevo.');
-    throw new Error('401: Unauthorized');
-  }
+  if(!ensureActiveSession()) throw new Error('401: Sesión expirada');
   const key = authSession.access_token;
-  const res = await fetch(SUPABASE_URL+'/rest/v1/'+path, {
+  const res = await authenticatedFetch(SUPABASE_URL+'/rest/v1/'+path, {
     method: 'GET',
     headers:{
       'apikey':        SUPABASE_ANON,
@@ -700,11 +710,8 @@ async function sbFetch(path, opts={}, useService=false){
 }
 
 async function callProxyAction(payload){
-  if(!authSession || !authSession.access_token){
-    clearAuth('Inicia sesión de nuevo.');
-    throw new Error('401: Unauthorized');
-  }
-  const res = await fetch(SUPABASE_URL+'/functions/v1/prompts-proxy', {
+  if(!ensureActiveSession()) throw new Error('401: Sesión expirada');
+  const res = await authenticatedFetch(SUPABASE_URL+'/functions/v1/prompts-proxy', {
     method: 'POST',
     headers:{
       'Content-Type':    'application/json',
@@ -832,7 +839,7 @@ async function refreshNewPromptCount(){
   if(!el||!authSession||!authSession.access_token) return;
   try{
     const q='prompts?select=id&updated_at=gte.'+encodeURIComponent(getNewPromptCutoff());
-    const res=await fetch(SUPABASE_URL+'/rest/v1/'+q,{
+    const res=await authenticatedFetch(SUPABASE_URL+'/rest/v1/'+q,{
       headers:{
         'apikey':SUPABASE_ANON,
         'Authorization':'Bearer '+authSession.access_token,
@@ -979,6 +986,32 @@ function sessionWithExpiry(session){
   return {...session, expires_at: expiresAt};
 }
 
+function scheduleAuthExpiry(){
+  clearTimeout(authExpiryTimer);
+  authExpiryTimer=null;
+  if(!AuthSession.isActive(authSession)){
+    expireAuthSession();
+    return;
+  }
+  authExpiryTimer=setTimeout(expireAuthSession,AuthSession.getExpiryDelay(authSession));
+}
+
+function expireAuthSession(){
+  clearAuth('La sesión ha expirado. Introduce tus credenciales de nuevo.');
+}
+
+function ensureActiveSession(){
+  if(AuthSession.isActive(authSession)) return true;
+  expireAuthSession();
+  return false;
+}
+
+function blockExpiredInteraction(event){
+  if(document.body.classList.contains('auth-locked')||ensureActiveSession()) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}
+
 function authRedirectUrl(){
   if(window.location.protocol === 'file:') return PUBLIC_APP_URL;
   return window.location.href.split('#')[0];
@@ -1101,6 +1134,7 @@ async function completeAuth(session){
   authSession = sessionWithExpiry(session);
   sessionStorage.setItem('promptylandiaAuthSession', JSON.stringify(authSession));
   authenticated = true;
+  scheduleAuthExpiry();
   const access = await callProxyAction({action:'checkAccess'});
   authState = access || authState;
   if(!access || !access.ok){
@@ -1123,6 +1157,7 @@ async function bootAuth(){
     authSession = hashSession;
     sessionStorage.setItem('promptylandiaAuthSession', JSON.stringify(authSession));
     authenticated = true;
+    scheduleAuthExpiry();
     setAuthMode('reset');
     showLogin('Introduce tu nueva contraseña.');
     return;
@@ -1142,6 +1177,7 @@ async function bootAuth(){
 
 async function requireAuth(){
   if(authenticated){
+    if(!ensureActiveSession()) return;
     if(await verifyAdminAccess()) switchTab('edit');
     return;
   }
@@ -1151,6 +1187,7 @@ async function requireAuth(){
 
 async function requireUsersAdmin(){
   if(authenticated){
+    if(!ensureActiveSession()) return;
     if(await verifyAdminAccess()) switchTab('users');
     return;
   }
@@ -1273,7 +1310,7 @@ async function doResetPassword(){
   }
   err.textContent='Guardando...';
   try{
-    const res = await fetch(authEndpoint('user'), {
+    const res = await authenticatedFetch(authEndpoint('user'), {
       method:'PUT',
       headers:{
         'Content-Type':'application/json',
@@ -1296,11 +1333,14 @@ function doGoogleLogin(){
 }
 
 function clearAuth(message){
+  clearTimeout(authExpiryTimer);
+  authExpiryTimer=null;
   authenticated=false;
   authSession=null;
   authState={isAdmin:false,status:null,email:''};
   sessionStorage.removeItem('promptylandiaAuthSession');
   document.body.classList.add('auth-locked');
+  setAuthMode('login');
   document.getElementById('loginPwd').value='';
   document.getElementById('loginError').textContent=message||'Sesión no autorizada.';
   document.getElementById('loginOverlay').classList.remove('hidden');
@@ -1309,9 +1349,7 @@ function clearAuth(message){
 function handleAuthError(e, targetEl){
   const msg = e && e.message ? e.message : '';
   if(msg.includes('401') || msg.includes('403')){
-    clearAuth('Sesión no autorizada.');
-    if(targetEl) targetEl.textContent='Sesión no autorizada.';
-    else toast('Sesión no autorizada.', true);
+    clearAuth(msg.includes('401')?'La sesión ha expirado. Introduce tus credenciales de nuevo.':'Sesión no autorizada.');
     return true;
   }
   return false;
@@ -1319,6 +1357,7 @@ function handleAuthError(e, targetEl){
 
 // ── TABS ─────────────────────────────────────────────────────────
 function switchTab(tab){
+  if(!ensureActiveSession()) return;
   ['search','edit','users'].forEach(t=>{
     document.getElementById('panel-'+t).classList.toggle('active',t===tab);
     document.getElementById('tab-'+t).classList.toggle('active',t===tab);
@@ -1327,6 +1366,15 @@ function switchTab(tab){
   if(tab==='edit') loadEditPage(1);
   if(tab==='users') loadPendingUsers();
 }
+
+document.addEventListener('pointerdown',blockExpiredInteraction,true);
+document.addEventListener('keydown',blockExpiredInteraction,true);
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&!document.body.classList.contains('auth-locked')) ensureActiveSession();
+});
+window.addEventListener('focus',()=>{
+  if(!document.body.classList.contains('auth-locked')) ensureActiveSession();
+});
 
 bootAuth();
 
@@ -1453,6 +1501,7 @@ function scoreRecord(rec, nTokens, pTokens){
 let _rankedResults = [];
 
 async function doSearch(){
+  if(!ensureActiveSession()) return;
   const fc=document.getElementById('f-cat').value,
         fs=document.getElementById('f-sub').value,
         fi=document.getElementById('f-ia').value,
@@ -1518,7 +1567,7 @@ async function runSearch(){
       _searchMode='server';
       // Dropdowns-only search: no ranking needed, use server pagination
       q+='&order=nombre.asc';
-      const countRes = await fetch(SUPABASE_URL+'/rest/v1/'+q, {
+      const countRes = await authenticatedFetch(SUPABASE_URL+'/rest/v1/'+q, {
         headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+authSession.access_token,'Prefer':'count=exact','Range':'0-0'}
       });
       searchTotal = parseInt(countRes.headers.get('content-range')?.split('/')[1]||'0');
@@ -1653,7 +1702,7 @@ async function loadEditPage(page){
     if(fi) q+='&ia=eq.'+encodeURIComponent(fi);
     if(fq) q+='&nombre=ilike.'+encodeURIComponent('%'+fq+'%');
     q+='&order=id.asc';
-    const countRes=await fetch(SUPABASE_URL+'/rest/v1/'+q,{
+    const countRes=await authenticatedFetch(SUPABASE_URL+'/rest/v1/'+q,{
       headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+authSession.access_token,'Prefer':'count=exact','Range':'0-0'}
     });
     editTotalCount=parseInt(countRes.headers.get('content-range')?.split('/')[1]||'0');

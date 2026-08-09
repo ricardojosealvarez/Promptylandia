@@ -8,7 +8,7 @@ Este documento consolida el contexto histórico del proyecto y su estado tras la
 - Rama principal: `main`
 - Commit validado: `c94f53450c74700d6e73e277b8f550af218f4b45`
 - Mensaje del commit: `fix(import): activate Excel file picker`
-- Versión visible: `v1.14.3`
+- Versión visible: `v1.15.0`
 - Ruta local canónica en Windows: `C:\Users\anita\Proyectos\Promptylandia`
 - Frontend: SPA estática en `index.html` con HTML, CSS y JavaScript vanilla.
 - Backend: Supabase Auth, Postgres, REST y Edge Functions.
@@ -49,6 +49,7 @@ Por tanto, GitHub es la fuente canónica del proyecto y el ZIP queda como respal
 - Importación Excel con altas y actualizaciones mediante `ACCION`, `NOMBRE_ANTIGUO` y `NOMBRE_NUEVO`.
 - Novedad Premium aleatoria al acceder a la página principal de búsqueda.
 - Prompt Premium aleatorio como alternativa cuando no hay novedades recientes.
+- Bloqueo inmediato de la interfaz y regreso al acceso cuando expira la sesión.
 
 ## Evolución principal
 
@@ -67,6 +68,7 @@ Por tanto, GitHub es la fuente canónica del proyecto y el ZIP queda como respal
 - `v1.14.1`: Prompt Destacado Premium cuando no existen novedades recientes.
 - `v1.14.2`: corrección de la selección aleatoria de novedades y prompts destacados.
 - `v1.14.3`: corrección de caché del selector de novedades destacadas.
+- `v1.15.0`: control automático de expiración de sesión.
 
 ## Datos históricos verificados
 
