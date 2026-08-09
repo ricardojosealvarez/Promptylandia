@@ -43,6 +43,7 @@ test('no elige un índice cuando no hay novedades', () => {
 test('carga una novedad al acceder a la pestaña de búsqueda', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
+  assert.match(html, /<script src="scripts\/featured-novelty\.js\?v=1\.14\.3"><\/script>/);
   assert.match(html, /<h2 id="featuredNoveltyTitle">Novedades destacadas<\/h2>/);
   assert.match(html, /if\(tab==='search'\) loadFeaturedNovelty\(\);/);
   assert.match(html, /title\.textContent='Prompt Destacado'/);
