@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {CURRENT_VERSION, RELEASE_NOTES, getReleaseNotes} = require('./release-notes-1.13.0.js');
+const {CURRENT_VERSION, RELEASE_NOTES, getReleaseNotes} = require('./release-notes-1.14.1.js');
 
 test('la versión actual coincide con la nota más reciente', () => {
   assert.equal(getReleaseNotes()[0].version, CURRENT_VERSION);
@@ -9,7 +9,7 @@ test('la versión actual coincide con la nota más reciente', () => {
 test('las notas se ordenan de la versión más reciente a la más antigua', () => {
   const versions = getReleaseNotes().map(({version}) => version);
 
-  assert.deepEqual(versions.slice(0, 4), ['1.13.0', '1.12.1', '1.12.0', '1.11.0']);
+  assert.deepEqual(versions.slice(0, 4), ['1.14.1', '1.14.0', '1.13.0', '1.12.1']);
 });
 
 test('cada versión tiene fecha ISO y al menos una mejora', () => {

@@ -1,0 +1,41 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+
+const {buildQuery, pickRandomIndex} = require('./featured-novelty.js');
+
+test('filtra únicamente prompts premium nuevos o actualizados', () => {
+  const query = buildQuery('2026-07-25T10:00:00.000Z');
+  const url = new URL(`https://example.com/${query}`);
+
+  assert.equal(url.searchParams.get('premium'), 'eq.true');
+  assert.equal(url.searchParams.get('updated_at'), 'gte.2026-07-25T10:00:00.000Z');
+  assert.equal(url.searchParams.get('order'), 'updated_at.desc');
+});
+
+test('permite seleccionar cualquier prompt premium como alternativa', () => {
+  const url = new URL(`https://example.com/${buildQuery()}`);
+
+  assert.equal(url.searchParams.get('premium'), 'eq.true');
+  assert.equal(url.searchParams.has('updated_at'), false);
+});
+
+test('elige un índice aleatorio dentro del total disponible', () => {
+  assert.equal(pickRandomIndex(5, () => 0), 0);
+  assert.equal(pickRandomIndex(5, () => 0.6), 3);
+  assert.equal(pickRandomIndex(5, () => 1), 4);
+});
+
+test('no elige un índice cuando no hay novedades', () => {
+  assert.equal(pickRandomIndex(0), -1);
+  assert.equal(pickRandomIndex(-1), -1);
+});
+
+test('carga una novedad al acceder a la pestaña de búsqueda', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+
+  assert.match(html, /<h2 id="featuredNoveltyTitle">Novedades destacadas<\/h2>/);
+  assert.match(html, /if\(tab==='search'\) loadFeaturedNovelty\(\);/);
+  assert.match(html, /title\.textContent='Prompt Destacado'/);
+});

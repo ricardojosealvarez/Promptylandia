@@ -65,6 +65,15 @@ textarea{resize:vertical;min-height:90px;font-size:12.5px;line-height:1.65;}
 .search-new-toggle{background:#10271d;color:var(--green);border:1px solid #1e5038;}
 .search-new-toggle input{accent-color:var(--green);}
 .new-count{font-family:var(--mono);font-size:10px;color:var(--green);white-space:nowrap;}
+.featured-novelty{padding:20px 28px 0;max-width:1600px;margin:0 auto;}
+.featured-heading{display:flex;align-items:baseline;gap:12px;margin-bottom:10px;}
+.featured-heading h2{font-size:16px;color:var(--accent2);}
+.featured-heading span{font-family:var(--mono);font-size:10px;color:var(--text-dimmer);}
+.featured-card{border-color:#5a3c10;background:linear-gradient(135deg,#18160f,var(--surface));
+  box-shadow:inset 3px 0 0 var(--amber);}
+.featured-card:hover{border-color:var(--amber);}
+.featured-message{padding:18px;border:1px dashed var(--border2);border-radius:8px;color:var(--text-dimmer);
+  font-family:var(--mono);font-size:11px;text-align:center;}
 .btn{border:none;padding:9px 20px;border-radius:6px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s,box-shadow .2s;}
 .btn-primary{background:linear-gradient(135deg,var(--accent),#3a7be0);color:#fff;box-shadow:0 2px 12px rgba(79,142,247,.3);}
 .btn-primary:hover{opacity:.9;}
@@ -259,6 +268,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   .card-main{grid-template-columns:1fr 1fr;}
   .filters,.filters2{grid-template-columns:1fr;}
   .search-header,.main,.editor-wrap{padding:14px;}
+  .featured-novelty{padding:14px 14px 0;}
   .modal-grid{grid-template-columns:1fr;}
   .release-entry{grid-template-columns:1fr;}
   .release-meta{align-items:center;flex-direction:row;}
@@ -303,7 +313,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.13.0</button>
+    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.14.1</button>
   </div>
 </div>
 
@@ -349,6 +359,15 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
       <span class="error-msg" id="errorMsg">&#x26A0; Selecciona al menos un filtro.</span>
     </div>
   </div>
+  <section class="featured-novelty" aria-labelledby="featuredNoveltyTitle">
+    <div class="featured-heading">
+      <h2 id="featuredNoveltyTitle">Novedades destacadas</h2>
+      <span>Premium · selección aleatoria</span>
+    </div>
+    <div id="featuredNoveltyContent" aria-live="polite">
+      <div class="featured-message"><span class="spinner"></span> Cargando…</div>
+    </div>
+  </section>
   <div class="main">
     <div id="rh" class="rh" style="display:none">
       <div class="rcount">Mostrando <strong id="rcount">0</strong> resultados<span id="pinfo"></span></div>
@@ -551,9 +570,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 <div class="toast" id="toast"></div>
 
 <script src="scripts/postgrest-search.js"></script>
-<script src="scripts/release-notes-1.13.0.js"></script>
+<script src="scripts/release-notes-1.14.1.js"></script>
 <script src="scripts/prompt-novelty.js"></script>
 <script src="scripts/import-actions.js"></script>
+<script src="scripts/featured-novelty.js"></script>
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
 const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
@@ -579,6 +599,8 @@ let deleteId  = null;
 let editingId = null;
 let _rangeFrom = null, _rangeTo = null;
 let releaseNotesPreviousFocus = null;
+let featuredPrompt = null;
+let featuredRequestId = 0;
 
 // ── HELPERS ───────────────────────────────────────────────────────
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -824,6 +846,109 @@ async function refreshNewPromptCount(){
   } catch(e){
     el.textContent='Novedades no disponibles';
   }
+}
+
+async function loadFeaturedNovelty(){
+  const content=document.getElementById('featuredNoveltyContent');
+  const title=document.getElementById('featuredNoveltyTitle');
+  if(!content||!authSession||!authSession.access_token) return;
+  const requestId=++featuredRequestId;
+  featuredPrompt=null;
+  title.textContent='Novedades destacadas';
+  content.innerHTML='<div class="featured-message"><span class="spinner"></span> Cargando…</div>';
+  try{
+    featuredPrompt=await fetchRandomFeaturedPrompt(FeaturedNovelty.buildQuery(getNewPromptCutoff()));
+    if(requestId!==featuredRequestId) return;
+    if(!featuredPrompt){
+      title.textContent='Prompt Destacado';
+      featuredPrompt=await fetchRandomFeaturedPrompt(FeaturedNovelty.buildQuery());
+      if(requestId!==featuredRequestId) return;
+    }
+    renderFeaturedNovelty();
+  } catch(e){
+    if(requestId!==featuredRequestId||handleAuthError(e)) return;
+    content.innerHTML='<div class="featured-message">No se pudo cargar la novedad destacada.</div>';
+  }
+}
+
+async function fetchRandomFeaturedPrompt(query){
+  const response=await fetch(SUPABASE_URL+'/rest/v1/'+query,{
+    headers:{
+      'apikey':SUPABASE_ANON,
+      'Authorization':'Bearer '+authSession.access_token,
+      'Prefer':'count=exact',
+      'Range':'0-0'
+    }
+  });
+  if(!response.ok) throw new Error(response.status+': '+await response.text());
+  const firstRows=await response.json();
+  const total=parseInt(response.headers.get('content-range')?.split('/')[1]||'0',10);
+  const randomIndex=FeaturedNovelty.pickRandomIndex(total);
+  if(randomIndex<0) return null;
+  if(randomIndex===0) return firstRows[0]||null;
+  const rows=await sbFetch(query,{headers:{'Range':randomIndex+'-'+randomIndex,'Prefer':''}},false);
+  return rows&&rows[0]?rows[0]:null;
+}
+
+function renderFeaturedNovelty(){
+  const content=document.getElementById('featuredNoveltyContent');
+  const rec=featuredPrompt;
+  if(!content||!rec){
+    if(content) content.innerHTML='<div class="featured-message">No hay prompts Premium disponibles.</div>';
+    return;
+  }
+  const hasNotes=rec.notas&&rec.notas.trim();
+  const noveltyStatus=PromptNovelty.getStatus(rec,NEW_PROMPT_DAYS);
+  const noveltyBadge=noveltyStatus==='updated'
+    ? '<span class="updated-badge">Actualizado</span>'
+    : '<span class="new-badge">Nuevo</span>';
+  content.innerHTML=
+    '<div class="card featured-card">'+
+      '<div class="card-main">'+
+        '<div class="cell"><span class="clabel">Categoría</span><span class="tag tc">'+esc(rec.categoria)+'</span></div>'+
+        '<div class="cell"><span class="clabel">Subcategoría</span><span class="tag ts">'+esc(rec.subcategoria)+'</span></div>'+
+        '<div class="cell"><span class="clabel">IA</span><span class="tag ti">'+esc(rec.ia)+'</span></div>'+
+        '<div class="cell"><span class="clabel">Nombre</span><span class="cval nm">'+esc(rec.nombre)+'</span></div>'+
+        '<div class="cell"><span class="clabel">Prompt</span><span class="cval pr">'+esc(rec.prompt)+'</span></div>'+
+        '<button class="btn-ver" id="featuredPromptButton" onclick="toggleFeaturedPrompt()">&#x25BC; Ver</button>'+
+        '<div class="card-badges">'+noveltyBadge+'<span class="premium-badge">Premium</span></div>'+
+      '</div>'+
+      '<div class="prompt-full" id="featuredPromptFull">'+
+        '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">'+
+          '<button class="btn-copy" id="featuredCopyButton" onclick="copyFeaturedPrompt()">&#x2398; Copiar prompt</button>'+
+        '</div>'+esc(rec.prompt)+
+      '</div>'+
+      (hasNotes?'<div class="notas-row has-notas"><span class="notas-label">Notas</span><span>'+esc(rec.notas)+'</span></div>':'')+
+    '</div>';
+}
+
+function toggleFeaturedPrompt(){
+  const prompt=document.getElementById('featuredPromptFull');
+  const button=document.getElementById('featuredPromptButton');
+  if(!prompt||!button) return;
+  const open=prompt.classList.toggle('open');
+  button.textContent=open?'▲ Contraer':'▼ Ver';
+}
+
+async function copyFeaturedPrompt(){
+  if(!featuredPrompt) return;
+  const button=document.getElementById('featuredCopyButton');
+  const reset=()=>{button.innerHTML='&#x2398; Copiar prompt';button.style.color='';button.style.borderColor='';};
+  try{
+    await navigator.clipboard.writeText(featuredPrompt.prompt);
+  } catch(e){
+    const textarea=document.createElement('textarea');
+    textarea.value=featuredPrompt.prompt;
+    textarea.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  }
+  button.textContent='✓ Copiado';
+  button.style.color='var(--green)';
+  button.style.borderColor='var(--green)';
+  setTimeout(reset,2000);
 }
 
 function buildDropdowns(catId, iaId, withAll){
@@ -1197,6 +1322,7 @@ function switchTab(tab){
     document.getElementById('panel-'+t).classList.toggle('active',t===tab);
     document.getElementById('tab-'+t).classList.toggle('active',t===tab);
   });
+  if(tab==='search') loadFeaturedNovelty();
   if(tab==='edit') loadEditPage(1);
   if(tab==='users') loadPendingUsers();
 }
