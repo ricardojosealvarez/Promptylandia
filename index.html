@@ -224,6 +224,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 .istat .num{font-family:var(--mono);font-size:22px;font-weight:600;display:block;}
 .istat .lbl{font-size:10px;color:var(--text-dimmer);font-family:var(--mono);text-transform:uppercase;letter-spacing:.7px;}
 .istat.added .num{color:var(--green);}
+.istat.updated .num{color:var(--accent2);}
 .istat.skipped .num{color:var(--amber);}
 .istat.errors .num{color:var(--red);}
 .istat.total .num{color:var(--accent2);}
@@ -302,7 +303,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.12.1</button>
+    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.13.0</button>
   </div>
 </div>
 
@@ -550,8 +551,9 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 <div class="toast" id="toast"></div>
 
 <script src="scripts/postgrest-search.js"></script>
-<script src="scripts/release-notes-1.12.1.js"></script>
+<script src="scripts/release-notes-1.13.0.js"></script>
 <script src="scripts/prompt-novelty.js"></script>
+<script src="scripts/import-actions.js"></script>
 <script>
 // ── CONFIG (reemplaza con tus valores) ────────────────────────────
 const SUPABASE_URL     = 'https://velrbxqjkslpjlumvelv.supabase.co';
@@ -594,12 +596,6 @@ function toast(msg,err){
   const el=document.getElementById('toast');
   el.textContent=msg; el.className='toast show'+(err?' err':'');
   clearTimeout(el._t); el._t=setTimeout(()=>el.className='toast',2800);
-}
-function parsePremium(value){
-  const normalized=String(value||'').trim().toUpperCase();
-  if(['SI','SÍ','YES','TRUE','1'].includes(normalized)) return true;
-  if(!normalized||['NO','FALSE','0'].includes(normalized)) return false;
-  throw new Error('PREMIUM debe ser SI o NO');
 }
 function setLoading(id,on){
   const el=document.getElementById(id);
@@ -1812,7 +1808,6 @@ async function confirmRangeDelete(){
 }
 
 // ── IMPORT EXCEL ──────────────────────────────────────────────────
-const REQUIRED_COLS=['CATEGORIA','SUBCATEGORIA','IA','NOMBRE','PROMPT'];
 function handleImportFile(input){
   const file=input.files[0]; if(!file) return;
   input.value='';
@@ -1825,55 +1820,34 @@ function handleImportFile(input){
 }
 async function processImportBuffer(buffer,filename){
   const XLSX=window.XLSX;
+  const importActions=window.PromptylandiaImportActions;
   if(!XLSX){toast('Librería XLSX no disponible.',true);return;}
+  if(!importActions){toast('Procesador de importación no disponible.',true);return;}
   const wb=XLSX.read(buffer,{type:'array'});
   const ws=wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
-  if(!rows.length){showImportResult(filename,0,0,[],['El fichero está vacío.']);return;}
-  const upperMap={};
-  Object.keys(rows[0]).forEach(k=>{upperMap[k.trim().toUpperCase()]=k;});
-  const missing=REQUIRED_COLS.filter(c=>!upperMap[c]);
-  if(missing.length){showImportResult(filename,0,0,[],['Faltan columnas: '+missing.join(', ')]);return;}
-  // Fetch existing keys for dedup
-  let existingKeys=new Set();
+  if(!rows.length){showImportResult(filename,0,0,0,[],['El fichero está vacío.']);return;}
+  const columnMap=importActions.getColumnMap(rows[0]);
+  const missing=importActions.getMissingColumns(columnMap);
+  if(missing.length){showImportResult(filename,0,0,0,[],['Faltan columnas: '+missing.join(', ')]);return;}
+  let existingPrompts=[];
   try{
-    let all=[], page=0, pageSize=1000, done=false;
+    let page=0, pageSize=1000, done=false;
     while(!done){
-      const data=await sbFetch('prompts?select=nombre,categoria&order=id.asc',
+      const data=await sbFetch('prompts?select=id,nombre,categoria&order=id.asc',
         {headers:{'Range':page*pageSize+'-'+(page*pageSize+pageSize-1),'Prefer':''},prefer:''},true);
       if(!data||data.length===0){done=true;}
-      else{data.forEach(r=>existingKeys.add(r.nombre.trim().toLowerCase()+'||'+r.categoria.trim().toLowerCase()));
+      else{existingPrompts.push(...data);
         if(data.length<pageSize) done=true; else page++;}
     }
   } catch(e){toast('Error cargando existentes: '+e.message,true);return;}
-  let toInsert=[],skipped=[],errors=[];
-  rows.forEach((row,i)=>{
-    const rowNum=i+2;
-    const cat=String(row[upperMap['CATEGORIA']]||'').trim(),
-          sub=String(row[upperMap['SUBCATEGORIA']]||'').trim(),
-          ia=String(row[upperMap['IA']]||'').trim().toUpperCase(),
-          nombre=String(row[upperMap['NOMBRE']]||'').trim(),
-          prompt=String(row[upperMap['PROMPT']]||'').trim(),
-          notas=upperMap['NOTAS']?String(row[upperMap['NOTAS']]||'').trim():'';
-    let premium=false;
-    try{
-      premium=upperMap['PREMIUM']?parsePremium(row[upperMap['PREMIUM']]):false;
-    } catch(e){
-      errors.push('Fila '+rowNum+': '+e.message);return;
-    }
-    if(!cat||!sub||!ia||!nombre||!prompt){
-      errors.push('Fila '+rowNum+': campos vacíos');return;
-    }
-    const key=nombre.toLowerCase()+'||'+cat.toLowerCase();
-    if(existingKeys.has(key)){skipped.push('Fila '+rowNum+': "'+nombre+'" / '+cat);return;}
-    existingKeys.add(key);
-    toInsert.push({categoria:cat,subcategoria:sub,ia,nombre,prompt,notas,premium});
-  });
-  // Insert in batches
+  const plan=importActions.createImportPlan(rows,existingPrompts,columnMap);
+  const errors=[...plan.errors];
   let added=0;
+  let updated=0;
   const BATCH=100;
-  for(let i=0;i<toInsert.length;i+=BATCH){
-    const batch=toInsert.slice(i,i+BATCH);
+  for(let i=0;i<plan.inserts.length;i+=BATCH){
+    const batch=plan.inserts.slice(i,i+BATCH);
     try{
       await sbFetch('prompts',{method:'POST',body:JSON.stringify(batch),prefer:'return=minimal'},true);
       added+=batch.length;
@@ -1882,20 +1856,32 @@ async function processImportBuffer(buffer,filename){
       errors.push('Error insertando lote: '+e.message);
     }
   }
+  for(const update of plan.updates){
+    try{
+      await sbFetch('prompts?id=eq.'+update.id,{method:'PATCH',body:JSON.stringify(update.prompt),prefer:'return=minimal'},true);
+      updated++;
+    } catch(e){
+      if(handleAuthError(e)) return;
+      errors.push('Fila '+update.rowNumber+': error actualizando "'+update.oldName+'": '+e.message);
+    }
+  }
   if(added>0){
     const c=parseInt(document.getElementById('totalCount').textContent.replace(/[^0-9]/g,''))||0;
     document.getElementById('totalCount').textContent=(c+added).toLocaleString('es-ES');
+  }
+  if(added>0||updated>0){
     loadEditPage(1);
     refreshNewPromptCount();
   }
-  showImportResult(filename,rows.length,added,skipped,errors);
+  showImportResult(filename,rows.length,added,updated,plan.skipped,errors);
 }
-function showImportResult(filename,total,added,skipped,errors){
+function showImportResult(filename,total,added,updated,skipped,errors){
   document.getElementById('importTitle').textContent='Importación: '+filename;
   document.getElementById('importSummary').innerHTML=
     '<div class="import-stats">'+
     '<div class="istat total"><span class="num">'+total+'</span><span class="lbl">Leídas</span></div>'+
     '<div class="istat added"><span class="num">'+added+'</span><span class="lbl">Añadidas</span></div>'+
+    '<div class="istat updated"><span class="num">'+updated+'</span><span class="lbl">Actualizadas</span></div>'+
     '<div class="istat skipped"><span class="num">'+skipped.length+'</span><span class="lbl">Duplicadas</span></div>'+
     '<div class="istat errors"><span class="num">'+errors.length+'</span><span class="lbl">Errores</span></div>'+
     '</div>';
