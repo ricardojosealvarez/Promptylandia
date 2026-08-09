@@ -4,8 +4,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.PromptylandiaReleaseNotes = api;
 })(typeof window !== 'undefined' ? window : globalThis, () => {
-  const CURRENT_VERSION = '1.14.1';
+  const CURRENT_VERSION = '1.14.2';
   const RELEASE_NOTES = Object.freeze([
+    {version:'1.14.2', date:'2026-08-09', changes:['Corregida la selección de novedades y prompts destacados para no depender del recuento devuelto por el navegador.']},
     {version:'1.14.1', date:'2026-08-09', changes:['Si no existen novedades recientes, se muestra un Prompt Destacado elegido al azar entre todos los prompts Premium.']},
     {version:'1.14.0', date:'2026-08-09', changes:['La página de búsqueda muestra una novedad destacada Premium elegida al azar entre las altas y actualizaciones recientes.']},
     {version:'1.13.0', date:'2026-08-09', changes:['La importación Excel admite altas y actualizaciones mediante ACCION, NOMBRE_ANTIGUO y NOMBRE_NUEVO.']},

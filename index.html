@@ -313,7 +313,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.14.1</button>
+    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.14.2</button>
   </div>
 </div>
 
@@ -570,7 +570,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 <div class="toast" id="toast"></div>
 
 <script src="scripts/postgrest-search.js"></script>
-<script src="scripts/release-notes-1.14.1.js"></script>
+<script src="scripts/release-notes-1.14.2.js"></script>
 <script src="scripts/prompt-novelty.js"></script>
 <script src="scripts/import-actions.js"></script>
 <script src="scripts/featured-novelty.js"></script>
@@ -857,11 +857,11 @@ async function loadFeaturedNovelty(){
   title.textContent='Novedades destacadas';
   content.innerHTML='<div class="featured-message"><span class="spinner"></span> Cargando…</div>';
   try{
-    featuredPrompt=await fetchRandomFeaturedPrompt(FeaturedNovelty.buildQuery(getNewPromptCutoff()));
+    featuredPrompt=await fetchRandomFeaturedPrompt(getNewPromptCutoff());
     if(requestId!==featuredRequestId) return;
     if(!featuredPrompt){
       title.textContent='Prompt Destacado';
-      featuredPrompt=await fetchRandomFeaturedPrompt(FeaturedNovelty.buildQuery());
+      featuredPrompt=await fetchRandomFeaturedPrompt();
       if(requestId!==featuredRequestId) return;
     }
     renderFeaturedNovelty();
@@ -871,22 +871,23 @@ async function loadFeaturedNovelty(){
   }
 }
 
-async function fetchRandomFeaturedPrompt(query){
-  const response=await fetch(SUPABASE_URL+'/rest/v1/'+query,{
-    headers:{
-      'apikey':SUPABASE_ANON,
-      'Authorization':'Bearer '+authSession.access_token,
-      'Prefer':'count=exact',
-      'Range':'0-0'
+async function fetchRandomFeaturedPrompt(cutoff=''){
+  const query=FeaturedNovelty.buildCandidateQuery(cutoff);
+  const ids=[];
+  let page=0,done=false;
+  while(!done){
+    const start=page*1000;
+    const rows=await sbFetch(query,{headers:{'Range':start+'-'+(start+999),'Prefer':''}},false);
+    if(!rows||!rows.length){
+      done=true;
+    } else {
+      rows.forEach(row=>ids.push(row.id));
+      if(rows.length<1000) done=true; else page++;
     }
-  });
-  if(!response.ok) throw new Error(response.status+': '+await response.text());
-  const firstRows=await response.json();
-  const total=parseInt(response.headers.get('content-range')?.split('/')[1]||'0',10);
-  const randomIndex=FeaturedNovelty.pickRandomIndex(total);
+  }
+  const randomIndex=FeaturedNovelty.pickRandomIndex(ids.length);
   if(randomIndex<0) return null;
-  if(randomIndex===0) return firstRows[0]||null;
-  const rows=await sbFetch(query,{headers:{'Range':randomIndex+'-'+randomIndex,'Prefer':''}},false);
+  const rows=await sbFetch(FeaturedNovelty.buildPromptQuery(ids[randomIndex]),{headers:{'Range':'0-0','Prefer':''}},false);
   return rows&&rows[0]?rows[0]:null;
 }
 

@@ -3,22 +3,30 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const {buildQuery, pickRandomIndex} = require('./featured-novelty.js');
+const {buildCandidateQuery, buildPromptQuery, pickRandomIndex} = require('./featured-novelty.js');
 
 test('filtra únicamente prompts premium nuevos o actualizados', () => {
-  const query = buildQuery('2026-07-25T10:00:00.000Z');
+  const query = buildCandidateQuery('2026-07-25T10:00:00.000Z');
   const url = new URL(`https://example.com/${query}`);
 
   assert.equal(url.searchParams.get('premium'), 'eq.true');
   assert.equal(url.searchParams.get('updated_at'), 'gte.2026-07-25T10:00:00.000Z');
-  assert.equal(url.searchParams.get('order'), 'updated_at.desc');
+  assert.equal(url.searchParams.get('select'), 'id');
+  assert.equal(url.searchParams.get('order'), 'id.asc');
 });
 
 test('permite seleccionar cualquier prompt premium como alternativa', () => {
-  const url = new URL(`https://example.com/${buildQuery()}`);
+  const url = new URL(`https://example.com/${buildCandidateQuery()}`);
 
   assert.equal(url.searchParams.get('premium'), 'eq.true');
   assert.equal(url.searchParams.has('updated_at'), false);
+});
+
+test('consulta únicamente el prompt seleccionado', () => {
+  const url = new URL(`https://example.com/${buildPromptQuery(42)}`);
+
+  assert.equal(url.searchParams.get('id'), 'eq.42');
+  assert.equal(url.searchParams.get('limit'), '1');
 });
 
 test('elige un índice aleatorio dentro del total disponible', () => {
