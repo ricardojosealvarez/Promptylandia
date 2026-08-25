@@ -33,6 +33,10 @@ test('la interfaz conecta captura y extracción con el proxy', () => {
     path.join(__dirname, '..', 'supabase', 'migrations', '20260825173945_add_prompt_suggestions.sql'),
     'utf8',
   );
+  const exportFix = fs.readFileSync(
+    path.join(__dirname, '..', 'supabase', 'migrations', '20260825163310_fix_prompt_suggestion_export_delete.sql'),
+    'utf8',
+  );
 
   assert.match(html, /openSuggestionModal\(\)/);
   assert.match(html, /action:'createPromptSuggestion'/);
@@ -45,4 +49,5 @@ test('la interfaz conecta captura y extracción con el proxy', () => {
   assert.match(migration, /alter table public\.prompt_suggestions enable row level security/i);
   assert.match(migration, /delete from public\.prompt_suggestions/i);
   assert.match(migration, /grant execute on function public\.extract_prompt_suggestions\(\) to service_role/i);
+  assert.match(exportFix, /delete from public\.prompt_suggestions\s+where true/i);
 });
