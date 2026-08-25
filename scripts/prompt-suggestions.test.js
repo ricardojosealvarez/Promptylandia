@@ -40,6 +40,9 @@ test('la interfaz conecta captura y extracción con el proxy', () => {
 
   assert.match(html, /openSuggestionModal\(\)/);
   assert.match(html, /action:'createPromptSuggestion'/);
+  assert.match(html, /Mándanos tu mejor prompt\./);
+  assert.match(html, /Nombre del prompt \(max\. 8 palabras\) \*/);
+  assert.match(html, /class="btn btn-suggest"/);
   assert.match(html, /action:'extractPromptSuggestions'/);
   assert.match(html, /id="suggestionsStatus"/);
   assert.match(html, /action:'getPromptSuggestionsStatus'/);

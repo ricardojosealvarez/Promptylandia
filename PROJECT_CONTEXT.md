@@ -8,7 +8,7 @@ Este documento consolida el contexto histórico del proyecto y su estado tras la
 - Rama principal: `main`
 - Commit validado: `c94f53450c74700d6e73e277b8f550af218f4b45`
 - Mensaje del commit: `fix(import): activate Excel file picker`
-- Versión visible: `v1.17.1`
+- Versión visible: `v1.18.0`
 - Ruta local canónica en Windows: `C:\Users\anita\Proyectos\Promptylandia`
 - Frontend: SPA estática en `index.html` con HTML, CSS y JavaScript vanilla.
 - Backend: Supabase Auth, Postgres, REST y Edge Functions.
@@ -75,6 +75,7 @@ Por tanto, GitHub es la fuente canónica del proyecto y el ZIP queda como respal
 - `v1.16.0`: propuestas de usuarios, exportación administrativa y créditos de contribuidor.
 - `v1.17.0`: avisador de propuestas pendientes junto al botón de exportación administrativa.
 - `v1.17.1`: corrección de la extracción de propuestas con protección de borrado seguro activa.
+- `v1.18.0`: mayor visibilidad para sugerencias y contribuidores, con orientación ampliada en el formulario.
 
 ## Datos históricos verificados
 
