@@ -50,6 +50,15 @@ Edge Functions are deployed separately to Supabase. The current production funct
 When changing it, deploy the function and verify:
 
 - non-authenticated calls return `401`
-- authenticated non-admin calls return `403`
+- approved non-admin users can submit `createPromptSuggestion`
+- authenticated non-admin calls to administrative actions return `403`
 - authenticated admin writes succeed
 - direct REST writes with `sb_publishable_...` fail
+
+For `v1.16.0`, deploy in this order:
+
+1. Apply `supabase/migrations/20260825173945_add_prompt_suggestions.sql`.
+2. Deploy `prompts-proxy`.
+3. Publish the frontend through GitHub Pages.
+4. Verify that an approved user can submit a proposal and an admin can export it to Excel.
+5. Confirm that the exported rows have been removed from `prompt_suggestions`.

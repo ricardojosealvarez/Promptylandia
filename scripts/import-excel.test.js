@@ -12,7 +12,7 @@ test('Importar Excel usa un botón real que activa el selector de archivos', () 
 });
 
 test('la página carga el procesador de acciones del Excel', () => {
-  assert.match(html, /<script src="scripts\/import-actions\.js"><\/script>/);
+  assert.match(html, /<script src="scripts\/import-actions\.js(?:\?v=[^"]+)?"><\/script>/);
   assert.match(html, /PromptylandiaImportActions/);
   assert.match(html, /<span class="lbl">Actualizadas<\/span>/);
 });

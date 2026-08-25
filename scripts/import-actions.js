@@ -43,6 +43,9 @@
     prompt: String(row[columnMap.PROMPT] || '').trim(),
     notas: columnMap.NOTAS ? String(row[columnMap.NOTAS] || '').trim() : '',
     premium: columnMap.PREMIUM ? parsePremium(row[columnMap.PREMIUM]) : false,
+    ...(columnMap.CONTRIBUIDOR
+      ? {contribuidor: String(row[columnMap.CONTRIBUIDOR] || '').trim()}
+      : {}),
   });
 
   const hasEmptyRequiredValue = (prompt) =>

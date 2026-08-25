@@ -135,6 +135,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   border-radius:5px;font-size:11.5px;color:#8ab870;}
 .notas-row.has-notas{display:flex;gap:8px;align-items:flex-start;}
 .notas-label{font-family:var(--mono);font-size:9px;color:#5a7a42;text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;padding-top:2px;}
+.contributor-credit{color:var(--text-dimmer);font-family:var(--mono);font-size:9px;margin-top:3px;}
 /* pagination */
 .pag{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:22px;padding-top:18px;border-top:1px solid var(--border);}
 .pb{background:var(--surface2);border:1px solid var(--border2);color:var(--text-dim);padding:5px 13px;
@@ -313,7 +314,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.15.0</button>
+    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.16.0</button>
   </div>
 </div>
 
@@ -355,6 +356,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
       </label>
       <button class="btn btn-primary" onclick="doSearch()">&#x2315; Buscar</button>
       <button class="btn btn-secondary" onclick="clearSearch()">&#x2715; Limpiar</button>
+      <button class="btn btn-secondary" onclick="openSuggestionModal()">&#x2B; Sugerir prompt</button>
       <span class="new-count" id="newCount">Calculando novedades…</span>
       <span class="error-msg" id="errorMsg">&#x26A0; Selecciona al menos un filtro.</span>
     </div>
@@ -387,6 +389,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
         <div class="subtitle" id="editSubtitle">…</div>
       </div>
       <div class="spacer"></div>
+      <button class="btn btn-secondary" id="extractSuggestionsButton" type="button" onclick="extractPromptSuggestions()">Exportar propuestas</button>
       <button class="btn btn-import" type="button" onclick="document.querySelector('#importFileInput').click()">&#x1F4C2; Importar Excel</button>
       <input class="file-input" type="file" id="importFileInput" accept=".xlsx,.xls" onchange="handleImportFile(this)">
       <button class="btn btn-primary" onclick="openModal(null)">&#x2B; Nueva entrada</button>
@@ -420,7 +423,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
       <table class="edit-table">
         <thead><tr>
           <th>ID</th><th>Categoría</th><th>Subcategoría</th><th>IA</th>
-          <th>Nombre</th><th>Premium</th><th>Prompt</th><th>Notas</th><th>Acciones</th>
+          <th>Nombre</th><th>Contribuidor</th><th>Premium</th><th>Prompt</th><th>Notas</th><th>Acciones</th>
         </tr></thead>
         <tbody id="editTbody"></tbody>
       </table>
@@ -489,6 +492,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
         <input type="text" id="m-nombre" placeholder="Nombre del prompt" />
       </div>
       <div class="fg">
+        <span class="flabel" id="m-contribuidor-label">Contribuidor</span>
+        <input type="text" id="m-contribuidor" maxlength="200" placeholder="Nombre público del contribuidor" />
+      </div>
+      <div class="fg">
         <span class="flabel">Premium</span>
         <label class="premium-toggle">
           <input type="checkbox" id="m-premium" />
@@ -507,7 +514,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
     <div id="modalError" style="color:var(--red);font-size:12px;font-family:var(--mono);min-height:18px;"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveModal()">&#x2713; Guardar</button>
+      <button class="btn btn-primary" id="modalSaveButton" onclick="saveModal()">&#x2713; Guardar</button>
     </div>
   </div>
 </div>
@@ -570,9 +577,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 <div class="toast" id="toast"></div>
 
 <script src="scripts/postgrest-search.js"></script>
-<script src="scripts/release-notes-1.15.0.js"></script>
+<script src="scripts/release-notes-1.16.0.js"></script>
 <script src="scripts/prompt-novelty.js"></script>
-<script src="scripts/import-actions.js"></script>
+<script src="scripts/import-actions.js?v=1.16.0"></script>
+<script src="scripts/prompt-suggestions.js?v=1.16.0"></script>
 <script src="scripts/featured-novelty.js?v=1.14.3"></script>
 <script src="scripts/auth-session.js"></script>
 <script>
@@ -598,6 +606,7 @@ let editCurrentPage = 1;
 let editTotalCount  = 0;
 let deleteId  = null;
 let editingId = null;
+let modalMode = 'prompt';
 let _rangeFrom = null, _rangeTo = null;
 let releaseNotesPreviousFocus = null;
 let featuredPrompt = null;
@@ -916,7 +925,7 @@ function renderFeaturedNovelty(){
         '<div class="cell"><span class="clabel">Categoría</span><span class="tag tc">'+esc(rec.categoria)+'</span></div>'+
         '<div class="cell"><span class="clabel">Subcategoría</span><span class="tag ts">'+esc(rec.subcategoria)+'</span></div>'+
         '<div class="cell"><span class="clabel">IA</span><span class="tag ti">'+esc(rec.ia)+'</span></div>'+
-        '<div class="cell"><span class="clabel">Nombre</span><span class="cval nm">'+esc(rec.nombre)+'</span></div>'+
+        '<div class="cell"><span class="clabel">Nombre</span><span class="cval nm">'+esc(rec.nombre)+'</span>'+(rec.contribuidor?'<span class="contributor-credit">Por '+esc(rec.contribuidor)+'</span>':'')+'</div>'+
         '<div class="cell"><span class="clabel">Prompt</span><span class="cval pr">'+esc(rec.prompt)+'</span></div>'+
         '<button class="btn-ver" id="featuredPromptButton" onclick="toggleFeaturedPrompt()">&#x25BC; Ver</button>'+
         '<div class="card-badges">'+noveltyBadge+'<span class="premium-badge">Premium</span></div>'+
@@ -1614,7 +1623,7 @@ function renderSearchResults(){
         '<div class="cell"><span class="clabel">Categoría</span><span class="tag tc">'+esc(rec.categoria)+'</span></div>'+
         '<div class="cell"><span class="clabel">Subcategoría</span><span class="tag ts">'+esc(rec.subcategoria)+'</span></div>'+
         '<div class="cell"><span class="clabel">IA</span><span class="tag ti">'+esc(rec.ia)+'</span></div>'+
-        '<div class="cell"><span class="clabel">Nombre</span><span class="cval nm">'+hl(rec.nombre,_sTokens.n)+'</span></div>'+
+        '<div class="cell"><span class="clabel">Nombre</span><span class="cval nm">'+hl(rec.nombre,_sTokens.n)+'</span>'+(rec.contribuidor?'<span class="contributor-credit">Por '+esc(rec.contribuidor)+'</span>':'')+'</div>'+
         '<div class="cell"><span class="clabel">Prompt</span><span class="cval pr">'+hl(rec.prompt,allT)+'</span></div>'+
         '<button class="btn-ver" id="pb-'+i+'" onclick="togglePrompt('+i+')">&#x25BC; Ver</button>'+
         '<div class="card-badges">'+noveltyBadge+premiumBadge+scoreBadge+'</div>'+
@@ -1690,7 +1699,7 @@ async function loadEditPage(page){
   editCurrentPage=page;
   setLoading('editTbody',false);
   document.getElementById('editTbody').innerHTML=
-    '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-dimmer)"><span class="spinner"></span> Cargando…</td></tr>';
+    '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-dimmer)"><span class="spinner"></span> Cargando…</td></tr>';
   const fc=document.getElementById('ef-cat').value,
         fs=document.getElementById('ef-sub').value,
         fi=document.getElementById('ef-ia').value,
@@ -1713,7 +1722,7 @@ async function loadEditPage(page){
     renderEditRows(rows||[], start);
     renderPag('editPag', page, Math.ceil(editTotalCount/EDIT_PAGE_SIZE), 'loadEditPage');
   } catch(e){
-    document.getElementById('editTbody').innerHTML='<tr><td colspan="9" style="color:var(--red);padding:16px;">Error: '+esc(e.message)+'</td></tr>';
+    document.getElementById('editTbody').innerHTML='<tr><td colspan="10" style="color:var(--red);padding:16px;">Error: '+esc(e.message)+'</td></tr>';
   }
 }
 
@@ -1723,7 +1732,7 @@ let _editRowCache = [];
 function renderEditRows(rows, offset=0){
   _editRowCache = rows;   // store for openModal/askDelete reference by index
   const tbody=document.getElementById('editTbody');
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-dimmer);">Sin resultados</td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-dimmer);">Sin resultados</td></tr>';return;}
   tbody.innerHTML=rows.map((r,i)=>{
     const pos=offset+i+1;
     const pp=r.prompt.length>80?r.prompt.slice(0,80)+'…':r.prompt;
@@ -1734,6 +1743,7 @@ function renderEditRows(rows, offset=0){
       '<td class="td-sub">'+esc(r.subcategoria)+'</td>'+
       '<td class="td-ia">'+esc(r.ia)+'</td>'+
       '<td class="td-nombre">'+esc(r.nombre)+'</td>'+
+      '<td>'+esc(r.contribuidor||'')+'</td>'+
       '<td class="td-premium">'+(r.premium?'<span class="premium-badge">SI</span>':'<span class="tag">NO</span>')+'</td>'+
       '<td class="td-prompt" title="'+esc(r.prompt)+'">'+esc(pp)+'</td>'+
       '<td class="td-notas" title="'+esc(r.notas||'')+'">'+esc(np)+'</td>'+
@@ -1842,6 +1852,7 @@ function addNewIa(){
 }
 
 function openModal(rec){
+  modalMode = 'prompt';
   editingId = rec ? rec.id : null;
   document.getElementById('modalTitle').textContent = rec ? 'Editar entrada' : 'Nueva entrada';
   document.getElementById('modalError').textContent='';
@@ -1850,14 +1861,26 @@ function openModal(rec){
     document.getElementById('new'+x+'Row').style.display='none';
     document.getElementById('new'+x+'Input').value='';
   });
-  const r = rec || {categoria:'',subcategoria:'',ia:'',nombre:'',prompt:'',notas:'',premium:false};
+  const r = rec || {categoria:'',subcategoria:'',ia:'',nombre:'',prompt:'',notas:'',premium:false,contribuidor:''};
   buildModalDropdowns(r.categoria, r.subcategoria, r.ia);
   document.getElementById('m-nombre').value=r.nombre;
+  document.getElementById('m-contribuidor').value=r.contribuidor||'';
+  document.getElementById('m-contribuidor-label').textContent='Contribuidor';
+  document.getElementById('modalSaveButton').innerHTML='&#x2713; Guardar';
   document.getElementById('m-premium').checked=!!r.premium;
   document.getElementById('m-prompt').value=r.prompt;
   document.getElementById('m-notas').value=r.notas||'';
   document.getElementById('modalOverlay').classList.add('open');
   setTimeout(()=>document.getElementById('m-nombre').focus(),100);
+}
+
+function openSuggestionModal(){
+  openModal(null);
+  modalMode='suggestion';
+  document.getElementById('modalTitle').textContent='Sugerir un prompt';
+  document.getElementById('m-contribuidor-label').textContent='Contribuidor *';
+  document.getElementById('modalSaveButton').textContent='Enviar propuesta';
+  setTimeout(()=>document.getElementById('m-contribuidor').focus(),100);
 }
 function closeModal(){ document.getElementById('modalOverlay').classList.remove('open'); }
 
@@ -1866,14 +1889,22 @@ async function saveModal(){
         sub=document.getElementById('m-sub').value.trim(),
         ia=document.getElementById('m-ia').value.trim(),
         nombre=document.getElementById('m-nombre').value.trim(),
+        contribuidor=document.getElementById('m-contribuidor').value.trim(),
         premium=document.getElementById('m-premium').checked,
         prompt=document.getElementById('m-prompt').value.trim(),
         notas=document.getElementById('m-notas').value.trim();
   const errEl=document.getElementById('modalError');
-  if(!cat||!sub||!ia||!nombre||!prompt){errEl.textContent='⚠ Todos los campos marcados * son obligatorios.';return;}
+  if(!cat||!sub||!ia||!nombre||!prompt||(modalMode==='suggestion'&&!contribuidor)){errEl.textContent='⚠ Todos los campos marcados * son obligatorios.';return;}
   errEl.textContent='';
-  const body=JSON.stringify({categoria:cat,subcategoria:sub,ia,nombre,prompt,notas,premium});
+  const promptData={categoria:cat,subcategoria:sub,ia,nombre,prompt,notas,premium,contribuidor};
   try{
+    if(modalMode==='suggestion'){
+      await callProxyAction({action:'createPromptSuggestion',suggestion:promptData});
+      closeModal();
+      toast('✓ Propuesta enviada.');
+      return;
+    }
+    const body=JSON.stringify(promptData);
     if(editingId){
       await sbFetch('prompts?id=eq.'+editingId,{method:'PATCH',body,prefer:'return=minimal'},true);
       toast('✓ Entrada actualizada.');
@@ -1980,6 +2011,32 @@ async function confirmRangeDelete(){
   } catch(e){
     if(handleAuthError(e)) return;
     toast('Error: '+e.message,true); closeConfirmRange();
+  }
+}
+
+async function extractPromptSuggestions(){
+  const XLSX=window.XLSX;
+  const suggestionsApi=window.PromptylandiaPromptSuggestions;
+  if(!XLSX||!suggestionsApi){toast('Exportador de propuestas no disponible.',true);return;}
+  if(!window.confirm('El Excel se descargará y las propuestas exportadas se eliminarán de la cola. ¿Continuar?')) return;
+  const button=document.getElementById('extractSuggestionsButton');
+  button.disabled=true;
+  try{
+    const suggestions=await callProxyAction({action:'extractPromptSuggestions'});
+    if(!Array.isArray(suggestions)||!suggestions.length){toast('No hay propuestas pendientes.');return;}
+    const rows=suggestionsApi.toExcelRows(suggestions);
+    const sheet=XLSX.utils.json_to_sheet(rows,{header:suggestionsApi.EXPORT_COLUMNS});
+    sheet['!autofilter']={ref:sheet['!ref']};
+    sheet['!cols']=[{wch:12},{wch:16},{wch:24},{wch:24},{wch:28},{wch:28},{wch:16},{wch:32},{wch:80},{wch:40},{wch:12},{wch:24}];
+    const workbook=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook,sheet,'Propuestas');
+    XLSX.writeFile(workbook,suggestionsApi.getExportFilename(),{compression:true});
+    toast('✓ '+suggestions.length+' propuestas exportadas y retiradas.');
+  } catch(e){
+    if(handleAuthError(e)) return;
+    toast('Error exportando propuestas: '+e.message,true);
+  } finally {
+    button.disabled=false;
   }
 }
 

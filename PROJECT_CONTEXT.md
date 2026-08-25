@@ -8,7 +8,7 @@ Este documento consolida el contexto histórico del proyecto y su estado tras la
 - Rama principal: `main`
 - Commit validado: `c94f53450c74700d6e73e277b8f550af218f4b45`
 - Mensaje del commit: `fix(import): activate Excel file picker`
-- Versión visible: `v1.15.0`
+- Versión visible: `v1.16.0`
 - Ruta local canónica en Windows: `C:\Users\anita\Proyectos\Promptylandia`
 - Frontend: SPA estática en `index.html` con HTML, CSS y JavaScript vanilla.
 - Backend: Supabase Auth, Postgres, REST y Edge Functions.
@@ -50,6 +50,9 @@ Por tanto, GitHub es la fuente canónica del proyecto y el ZIP queda como respal
 - Novedad Premium aleatoria al acceder a la página principal de búsqueda.
 - Prompt Premium aleatorio como alternativa cuando no hay novedades recientes.
 - Bloqueo inmediato de la interfaz y regreso al acceso cuando expira la sesión.
+- Propuestas de prompts de usuarios aprobados con nombre público de contribuidor.
+- Extracción administrativa de propuestas a Excel con borrado atómico de la cola.
+- Importación y visualización del campo opcional `CONTRIBUIDOR`.
 
 ## Evolución principal
 
@@ -69,6 +72,7 @@ Por tanto, GitHub es la fuente canónica del proyecto y el ZIP queda como respal
 - `v1.14.2`: corrección de la selección aleatoria de novedades y prompts destacados.
 - `v1.14.3`: corrección de caché del selector de novedades destacadas.
 - `v1.15.0`: control automático de expiración de sesión.
+- `v1.16.0`: propuestas de usuarios, exportación administrativa y créditos de contribuidor.
 
 ## Datos históricos verificados
 
@@ -88,7 +92,7 @@ Los scripts de `supabase/manual/` documentan la sincronización puntual de Premi
 - Las políticas RLS exigen que el usuario esté aprobado.
 - Las escrituras se realizan mediante `prompts-proxy`.
 - Un usuario no autenticado debe recibir `401` del proxy.
-- Un usuario autenticado sin permisos de administración debe recibir `403` al intentar escribir.
+- Un usuario aprobado puede enviar propuestas; sin permisos de administración debe recibir `403` en el resto de escrituras.
 - La clave publicable de Supabase puede estar en el frontend.
 - Nunca deben añadirse al frontend ni al repositorio claves `service_role`, `sb_secret_...`, contraseñas, claves de base de datos o secretos de Edge Functions.
 

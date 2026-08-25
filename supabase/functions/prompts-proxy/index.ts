@@ -17,6 +17,7 @@ type PromptInput = {
   prompt: string
   notas?: string
   premium?: boolean
+  contribuidor?: string
 }
 
 type AuthUser = {
@@ -67,11 +68,11 @@ const sanitizePrompt = (value: unknown): PromptInput => {
     throw new Error('Invalid prompt payload')
   }
   const raw = value as Record<string, unknown>
-  const allowed = new Set(['categoria', 'subcategoria', 'ia', 'nombre', 'prompt', 'notas', 'premium'])
+  const allowed = new Set(['categoria', 'subcategoria', 'ia', 'nombre', 'prompt', 'notas', 'premium', 'contribuidor'])
   for (const key of Object.keys(raw)) {
     if (!allowed.has(key)) throw new Error(`Unexpected field: ${key}`)
   }
-  return {
+  const prompt: PromptInput = {
     categoria: normalizeText(raw.categoria, 'categoria', 160),
     subcategoria: normalizeText(raw.subcategoria, 'subcategoria', 160),
     ia: normalizeText(raw.ia, 'ia', 80).toUpperCase(),
@@ -80,6 +81,16 @@ const sanitizePrompt = (value: unknown): PromptInput => {
     notas: normalizeText(raw.notas, 'notas', 10000, false),
     premium: normalizePremium(raw.premium),
   }
+  if (Object.hasOwn(raw, 'contribuidor')) {
+    prompt.contribuidor = normalizeText(raw.contribuidor, 'contribuidor', 200, false)
+  }
+  return prompt
+}
+
+const sanitizeSuggestion = (value: unknown) => {
+  const suggestion = sanitizePrompt(value)
+  if (!suggestion.contribuidor) throw new Error('Missing contribuidor')
+  return suggestion
 }
 
 const serviceFetch = async (path: string, init: RequestInit = {}) => {
@@ -196,6 +207,20 @@ serve(async (req) => {
     })
   }
 
+  if (payload.action === 'createPromptSuggestion') {
+    if (access.status !== 'approved' && !admin) return text('Forbidden', 403)
+    try {
+      const suggestion = sanitizeSuggestion(payload.suggestion)
+      return serviceFetch('prompt_suggestions', {
+        method: 'POST',
+        body: JSON.stringify({...suggestion, suggested_by: user.id}),
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid request'
+      return text(message, 400)
+    }
+  }
+
   if (!admin) return text('Forbidden', 403)
 
   try {
@@ -227,6 +252,13 @@ serve(async (req) => {
         const approved = await readJson(approveRes)
         return json({user: Array.isArray(approved) ? approved[0] : null, emailNotification: 'not_configured'}, approveRes.status)
       }
+
+      case 'extractPromptSuggestions':
+        return serviceFetch('rpc/extract_prompt_suggestions', {
+          method: 'POST',
+          headers: {'Prefer': 'return=representation'},
+          body: '{}',
+        })
 
       case 'createPrompt': {
         const prompt = sanitizePrompt(payload.prompt)
