@@ -4,8 +4,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.PromptylandiaReleaseNotes = api;
 })(typeof window !== 'undefined' ? window : globalThis, () => {
-  const CURRENT_VERSION = '1.16.0';
+  const CURRENT_VERSION = '1.17.0';
   const RELEASE_NOTES = Object.freeze([
+    {version:'1.17.0', date:'2026-08-25', changes:['La administración ve junto al botón de exportación si existen propuestas pendientes.']},
     {version:'1.16.0', date:'2026-08-25', changes:['Los usuarios aprobados pueden sugerir prompts indicando un nombre público de contribuidor.', 'La administración puede exportar y retirar las propuestas pendientes en un Excel compatible con la carga.', 'Los prompts importados con CONTRIBUIDOR muestran el crédito en la aplicación.']},
     {version:'1.15.0', date:'2026-08-09', changes:['Al expirar la sesión se bloquea la interfaz y vuelve a mostrarse inmediatamente el acceso por credenciales.']},
     {version:'1.14.3', date:'2026-08-09', changes:['Corregida la carga del selector de novedades tras actualizar la aplicación evitando reutilizar una versión anterior almacenada en caché.']},

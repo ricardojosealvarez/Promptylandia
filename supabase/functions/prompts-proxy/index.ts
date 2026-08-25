@@ -228,6 +228,14 @@ serve(async (req) => {
       case 'checkAdmin':
         return json({ok: true})
 
+      case 'getPromptSuggestionsStatus': {
+        const suggestionsRes = await serviceFetch('prompt_suggestions?select=id&limit=1', {
+          headers: {'Prefer': ''},
+        })
+        const suggestions = await readJson(suggestionsRes)
+        return json({pending: Array.isArray(suggestions) && suggestions.length > 0}, suggestionsRes.status)
+      }
+
       case 'listPendingUsers': {
         const pendingRes = await serviceFetch(
           'user_access?select=user_id,email,status,requested_at&status=eq.pending&order=requested_at.asc',

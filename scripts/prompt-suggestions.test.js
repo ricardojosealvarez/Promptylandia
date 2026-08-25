@@ -37,7 +37,10 @@ test('la interfaz conecta captura y extracción con el proxy', () => {
   assert.match(html, /openSuggestionModal\(\)/);
   assert.match(html, /action:'createPromptSuggestion'/);
   assert.match(html, /action:'extractPromptSuggestions'/);
+  assert.match(html, /id="suggestionsStatus"/);
+  assert.match(html, /action:'getPromptSuggestionsStatus'/);
   assert.match(proxy, /case 'extractPromptSuggestions'/);
+  assert.match(proxy, /case 'getPromptSuggestionsStatus'/);
   assert.match(proxy, /payload\.action === 'createPromptSuggestion'/);
   assert.match(migration, /alter table public\.prompt_suggestions enable row level security/i);
   assert.match(migration, /delete from public\.prompt_suggestions/i);
