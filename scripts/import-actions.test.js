@@ -18,6 +18,7 @@ const baseRow = {
   PROMPT: 'Contenido',
   NOTAS: 'Nota',
   PREMIUM: 'SI',
+  CONTRIBUIDOR: 'Ada',
 };
 
 const existing = [
@@ -42,6 +43,7 @@ test('ALTA conserva el comportamiento habitual', () => {
     prompt: 'Contenido',
     notas: 'Nota',
     premium: true,
+    contribuidor: 'Ada',
   });
   assert.equal(plan.updates.length, 0);
   assert.deepEqual(plan.errors, []);
@@ -76,6 +78,13 @@ test('ACTUALIZACION mantiene el nombre si NOMBRE_NUEVO está vacío', () => {
   const plan = createImportPlan([row], existing);
 
   assert.equal(plan.updates[0].prompt.nombre, 'Prompt anterior');
+});
+
+test('omite el contribuidor si la columna no existe para no borrar datos al actualizar', () => {
+  const {CONTRIBUIDOR, ...rowWithoutContributor} = baseRow;
+  const plan = createImportPlan([rowWithoutContributor], existing);
+
+  assert.equal(Object.hasOwn(plan.inserts[0], 'contribuidor'), false);
 });
 
 test('rechaza acciones desconocidas y actualizaciones sin coincidencia única', () => {
