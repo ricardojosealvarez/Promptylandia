@@ -79,6 +79,13 @@ textarea{resize:vertical;min-height:90px;font-size:12.5px;line-height:1.65;}
 .btn-primary:hover{opacity:.9;}
 .btn-secondary{background:transparent;color:var(--text-dim);border:1px solid var(--border2);}
 .btn-secondary:hover{color:var(--text);border-color:var(--text-dimmer);}
+.suggestions-export{display:flex;align-items:center;gap:8px;}
+.suggestions-status{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid var(--border2);
+  color:var(--text-dimmer);font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.4px;white-space:nowrap;}
+.suggestions-status::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;}
+.suggestions-status.pending{color:var(--amber);background:#2e220d;border-color:#5a3c10;}
+.suggestions-status.empty{color:var(--green);background:#10271d;border-color:#1e5038;}
+.suggestions-status.error{color:var(--red);background:var(--red-bg);border-color:var(--red-border);}
 .btn-danger{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);}
 .btn-danger:hover{background:#3a1020;}
 .btn-edit{background:var(--edit-bg);color:var(--edit);border:1px solid var(--edit-border);padding:4px 11px;font-size:11px;}
@@ -274,6 +281,8 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   .release-entry{grid-template-columns:1fr;}
   .release-meta{align-items:center;flex-direction:row;}
   .edit-filters{flex-direction:column;}
+  .editor-topbar{flex-wrap:wrap;}
+  .editor-topbar .spacer{display:none;}
 }
 </style>
 </head>
@@ -314,7 +323,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.16.0</button>
+    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.17.0</button>
   </div>
 </div>
 
@@ -389,7 +398,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
         <div class="subtitle" id="editSubtitle">…</div>
       </div>
       <div class="spacer"></div>
-      <button class="btn btn-secondary" id="extractSuggestionsButton" type="button" onclick="extractPromptSuggestions()">Exportar propuestas</button>
+      <div class="suggestions-export">
+        <button class="btn btn-secondary" id="extractSuggestionsButton" type="button" onclick="extractPromptSuggestions()">Exportar propuestas</button>
+        <span class="suggestions-status" id="suggestionsStatus" role="status" aria-live="polite">Consultando…</span>
+      </div>
       <button class="btn btn-import" type="button" onclick="document.querySelector('#importFileInput').click()">&#x1F4C2; Importar Excel</button>
       <input class="file-input" type="file" id="importFileInput" accept=".xlsx,.xls" onchange="handleImportFile(this)">
       <button class="btn btn-primary" onclick="openModal(null)">&#x2B; Nueva entrada</button>
@@ -577,10 +589,10 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 <div class="toast" id="toast"></div>
 
 <script src="scripts/postgrest-search.js"></script>
-<script src="scripts/release-notes-1.16.0.js"></script>
+<script src="scripts/release-notes-1.17.0.js"></script>
 <script src="scripts/prompt-novelty.js"></script>
-<script src="scripts/import-actions.js?v=1.16.0"></script>
-<script src="scripts/prompt-suggestions.js?v=1.16.0"></script>
+<script src="scripts/import-actions.js?v=1.17.0"></script>
+<script src="scripts/prompt-suggestions.js?v=1.17.0"></script>
 <script src="scripts/featured-novelty.js?v=1.14.3"></script>
 <script src="scripts/auth-session.js"></script>
 <script>
@@ -1372,7 +1384,10 @@ function switchTab(tab){
     document.getElementById('tab-'+t).classList.toggle('active',t===tab);
   });
   if(tab==='search') loadFeaturedNovelty();
-  if(tab==='edit') loadEditPage(1);
+  if(tab==='edit'){
+    loadEditPage(1);
+    refreshPromptSuggestionsStatus();
+  }
   if(tab==='users') loadPendingUsers();
 }
 
@@ -2037,6 +2052,24 @@ async function extractPromptSuggestions(){
     toast('Error exportando propuestas: '+e.message,true);
   } finally {
     button.disabled=false;
+    refreshPromptSuggestionsStatus();
+  }
+}
+
+async function refreshPromptSuggestionsStatus(){
+  const status=document.getElementById('suggestionsStatus');
+  if(!status) return;
+  status.className='suggestions-status';
+  status.textContent='Consultando…';
+  try{
+    const result=await callProxyAction({action:'getPromptSuggestionsStatus'});
+    const pending=Boolean(result&&result.pending);
+    status.classList.add(pending?'pending':'empty');
+    status.textContent=pending?'Propuestas pendientes':'Sin propuestas pendientes';
+  } catch(e){
+    if(handleAuthError(e)) return;
+    status.classList.add('error');
+    status.textContent='Estado no disponible';
   }
 }
 
