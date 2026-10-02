@@ -329,7 +329,7 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
   <div class="tab" id="tab-users" onclick="requireUsersAdmin()">Usuarios</div>
   <div class="topbar-right">
     <div class="record-count">Total: <span id="totalCount">…</span></div>
-    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.18.0</button>
+    <button class="version-button" id="versionButton" type="button" onclick="openReleaseNotes()" aria-haspopup="dialog">v1.19.0</button>
   </div>
 </div>
 
@@ -596,9 +596,9 @@ mark{background:rgba(245,166,35,.25);color:var(--amber);border-radius:2px;paddin
 <div class="toast" id="toast"></div>
 
 <script src="scripts/postgrest-search.js"></script>
-<script src="scripts/release-notes-1.18.0.js"></script>
+<script src="scripts/release-notes-1.18.0.js?v=1.19.0"></script>
 <script src="scripts/prompt-novelty.js"></script>
-<script src="scripts/import-actions.js?v=1.18.0"></script>
+<script src="scripts/import-actions.js?v=1.19.0"></script>
 <script src="scripts/prompt-suggestions.js?v=1.18.0"></script>
 <script src="scripts/featured-novelty.js?v=1.14.3"></script>
 <script src="scripts/auth-session.js"></script>
@@ -2101,27 +2101,29 @@ async function processImportBuffer(buffer,filename){
   if(!XLSX){toast('Librería XLSX no disponible.',true);return;}
   if(!importActions){toast('Procesador de importación no disponible.',true);return;}
   const wb=XLSX.read(buffer,{type:'array'});
+  const bajaSheetName=wb.SheetNames.find(name=>String(name).trim().toUpperCase()==='BAJAS');
   const ws=wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
-  if(!rows.length){showImportResult(filename,0,0,0,[],['El fichero está vacío.']);return;}
+  if(!rows.length && !bajaSheetName){showImportResult(filename,0,0,0,0,[],['El fichero está vacío.']);return;}
   const columnMap=importActions.getColumnMap(rows[0]);
   const missing=importActions.getMissingColumns(columnMap);
-  if(missing.length){showImportResult(filename,0,0,0,[],['Faltan columnas: '+missing.join(', ')]);return;}
+  if(missing.length && !bajaSheetName){showImportResult(filename,0,0,0,0,[],['Faltan columnas: '+missing.join(', ')]);return;}
   let existingPrompts=[];
   try{
     let page=0, pageSize=1000, done=false;
     while(!done){
-      const data=await sbFetch('prompts?select=id,nombre,categoria&order=id.asc',
+      const data=await sbFetch('prompts?select=id,nombre,categoria,subcategoria,ia,prompt&order=id.asc',
         {headers:{'Range':page*pageSize+'-'+(page*pageSize+pageSize-1),'Prefer':''},prefer:''},true);
       if(!data||data.length===0){done=true;}
       else{existingPrompts.push(...data);
         if(data.length<pageSize) done=true; else page++;}
     }
   } catch(e){toast('Error cargando existentes: '+e.message,true);return;}
-  const plan=importActions.createImportPlan(rows,existingPrompts,columnMap);
+  const plan=missing.length ? {inserts:[],updates:[],skipped:[],errors:[]} : importActions.createImportPlan(rows,existingPrompts,columnMap);
   const errors=[...plan.errors];
   let added=0;
   let updated=0;
+  let deleted=0;
   const BATCH=100;
   for(let i=0;i<plan.inserts.length;i+=BATCH){
     const batch=plan.inserts.slice(i,i+BATCH);
@@ -2142,6 +2144,25 @@ async function processImportBuffer(buffer,filename){
       errors.push('Fila '+update.rowNumber+': error actualizando "'+update.oldName+'": '+e.message);
     }
   }
+  if(bajaSheetName){
+    const bajaRows=XLSX.utils.sheet_to_json(wb.Sheets[bajaSheetName],{defval:''});
+    if(bajaRows.length){
+      const bajaMap=importActions.getColumnMap(bajaRows[0]);
+      const bajaMissing=importActions.getMissingBajaColumns(bajaMap);
+      if(bajaMissing.length){
+        errors.push('Pestaña BAJAS: faltan columnas: '+bajaMissing.join(', '));
+      } else {
+        const bajaPlan=importActions.createBajaPlan(bajaRows,existingPrompts,bajaMap);
+        errors.push(...bajaPlan.errors);
+        const ids=bajaPlan.deletes.map(item=>item.id);
+        for(let i=0;i<ids.length;i+=100){
+          const batch=ids.slice(i,i+100);
+          try{ await sbFetch('prompts?id=in.('+batch.join(',')+')',{method:'DELETE',prefer:'return=minimal'},true); deleted+=batch.length; }
+          catch(e){ if(handleAuthError(e)) return; errors.push('Error eliminando bajas: '+e.message); }
+        }
+      }
+    }
+  }
   if(added>0){
     const c=parseInt(document.getElementById('totalCount').textContent.replace(/[^0-9]/g,''))||0;
     document.getElementById('totalCount').textContent=(c+added).toLocaleString('es-ES');
@@ -2150,15 +2171,16 @@ async function processImportBuffer(buffer,filename){
     loadEditPage(1);
     refreshNewPromptCount();
   }
-  showImportResult(filename,rows.length,added,updated,plan.skipped,errors);
+  showImportResult(filename,rows.length,added,updated,deleted,plan.skipped,errors);
 }
-function showImportResult(filename,total,added,updated,skipped,errors){
+function showImportResult(filename,total,added,updated,deleted,skipped,errors){
   document.getElementById('importTitle').textContent='Importación: '+filename;
   document.getElementById('importSummary').innerHTML=
     '<div class="import-stats">'+
     '<div class="istat total"><span class="num">'+total+'</span><span class="lbl">Leídas</span></div>'+
     '<div class="istat added"><span class="num">'+added+'</span><span class="lbl">Añadidas</span></div>'+
     '<div class="istat updated"><span class="num">'+updated+'</span><span class="lbl">Actualizadas</span></div>'+
+    '<div class="istat deleted"><span class="num">'+deleted+'</span><span class="lbl">Dadas de baja</span></div>'+
     '<div class="istat skipped"><span class="num">'+skipped.length+'</span><span class="lbl">Duplicadas</span></div>'+
     '<div class="istat errors"><span class="num">'+errors.length+'</span><span class="lbl">Errores</span></div>'+
     '</div>';
