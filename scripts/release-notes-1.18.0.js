@@ -4,8 +4,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.PromptylandiaReleaseNotes = api;
 })(typeof window !== 'undefined' ? window : globalThis, () => {
-  const CURRENT_VERSION = '1.18.0';
+  const CURRENT_VERSION = '1.19.0';
   const RELEASE_NOTES = Object.freeze([
+    {version:'1.19.0', date:'2026-10-02', changes:['La importación Excel admite la pestaña BAJAS para identificar y eliminar prompts, mostrando los errores de las bajas no aplicadas.']},
     {version:'1.18.0', date:'2026-08-25', changes:['Destacados el botón para sugerir prompts y los créditos de contribuidor.', 'El formulario de propuestas explica el proceso de revisión y orienta sobre la longitud del nombre.']},
     {version:'1.17.1', date:'2026-08-25', changes:['Corregida la exportación administrativa de propuestas en bases de datos con protección frente a borrados sin filtro.']},
     {version:'1.17.0', date:'2026-08-25', changes:['La administración ve junto al botón de exportación si existen propuestas pendientes.']},

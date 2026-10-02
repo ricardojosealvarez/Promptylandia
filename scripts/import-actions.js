@@ -35,6 +35,55 @@
   const getMissingColumns = (columnMap) =>
     REQUIRED_COLUMNS.filter((column) => !columnMap[column]);
 
+  const BAJA_COLUMNS = Object.freeze(['NOMBRE', 'PROMPT']);
+  const getMissingBajaColumns = (columnMap) =>
+    BAJA_COLUMNS.filter((column) => !columnMap[column]);
+
+  const getBajaKey = (row, columnMap) => [
+    row[columnMap.NOMBRE], row[columnMap.PROMPT], row[columnMap.CATEGORIA],
+    row[columnMap.SUBCATEGORIA], row[columnMap.IA], row[columnMap.HASH_SHA1_PROMPT],
+  ].map(normalizeKey).join('||');
+
+  const createBajaPlan = (rows, existingPrompts, columnMap = getColumnMap(rows[0])) => {
+    const deletes = [];
+    const skipped = [];
+    const errors = [];
+    const usedIds = new Set();
+    rows.forEach((row, index) => {
+      const rowNumber = index + 2;
+      const name = String(row[columnMap.NOMBRE] || '').trim();
+      const promptText = String(row[columnMap.PROMPT] || '').trim();
+      const category = String(row[columnMap.CATEGORIA] || '').trim();
+      const hash = String(row[columnMap.HASH_SHA1_PROMPT] || '').trim().toLowerCase();
+      if (!name && !promptText && !hash) {
+        errors.push(`Fila ${rowNumber}: faltan NOMBRE, PROMPT y HASH_SHA1_PROMPT`);
+        return;
+      }
+      const matches = existingPrompts.filter((candidate) => {
+        if (hash && String(candidate.hash_sha1_prompt || '').toLowerCase() === hash) return true;
+        const sameName = normalizeKey(candidate.nombre) === normalizeKey(name);
+        const samePrompt = normalizeKey(candidate.prompt) === normalizeKey(promptText);
+        const sameCategory = !category || normalizeKey(candidate.categoria) === normalizeKey(category);
+        return sameName && samePrompt && sameCategory;
+      });
+      if (matches.length === 0) {
+        errors.push(`Fila ${rowNumber}: no existe el prompt "${name || '(sin nombre)'}"`);
+        return;
+      }
+      if (matches.length > 1) {
+        errors.push(`Fila ${rowNumber}: hay varios prompts coincidentes para "${name || '(sin nombre)'}"`);
+        return;
+      }
+      if (usedIds.has(matches[0].id)) {
+        skipped.push(`Fila ${rowNumber}: "${name}" ya está incluida para baja`);
+        return;
+      }
+      usedIds.add(matches[0].id);
+      deletes.push({id: matches[0].id, rowNumber, name});
+    });
+    return {deletes, skipped, errors};
+  };
+
   const getPromptData = (row, columnMap, name) => ({
     categoria: String(row[columnMap.CATEGORIA] || '').trim(),
     subcategoria: String(row[columnMap.SUBCATEGORIA] || '').trim(),
@@ -148,5 +197,5 @@
     return {inserts, updates, skipped, errors};
   };
 
-  return Object.freeze({REQUIRED_COLUMNS, createImportPlan, getColumnMap, getMissingColumns});
+  return Object.freeze({BAJA_COLUMNS, REQUIRED_COLUMNS, createBajaPlan, createImportPlan, getColumnMap, getMissingBajaColumns, getMissingColumns});
 });
