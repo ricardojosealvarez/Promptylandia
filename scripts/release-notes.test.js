@@ -8,8 +8,26 @@ test('la versión actual coincide con la nota más reciente', () => {
 
 test('las notas se ordenan de la versión más reciente a la más antigua', () => {
   const versions = getReleaseNotes().map(({version}) => version);
+  const parseVersion = (version) => {
+    assert.match(version, /^\d+\.\d+\.\d+$/);
+    return version.split('.').map(Number);
+  };
 
-  assert.deepEqual(versions.slice(0, 4), ['1.18.0', '1.17.1', '1.17.0', '1.16.0']);
+  assert.ok(versions.length > 0);
+  assert.equal(versions[0], CURRENT_VERSION);
+
+  const parsedVersions = versions.map(parseVersion);
+  for (let index = 1; index < parsedVersions.length; index += 1) {
+    const [previousMajor, previousMinor, previousPatch] = parsedVersions[index - 1];
+    const [currentMajor, currentMinor, currentPatch] = parsedVersions[index];
+    const isDescending = previousMajor > currentMajor
+      || (previousMajor === currentMajor && previousMinor > currentMinor)
+      || (previousMajor === currentMajor && previousMinor === currentMinor && previousPatch >= currentPatch);
+
+    assert.ok(isDescending, `${versions[index - 1]} debe preceder a ${versions[index]}`);
+  }
+
+  assert.equal(new Set(versions).size, versions.length, 'no debe haber versiones duplicadas');
 });
 
 test('cada versión tiene fecha ISO y al menos una mejora', () => {
